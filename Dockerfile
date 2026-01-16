@@ -10,7 +10,8 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build Go binary (shared)
 # -----------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+# Use ECR Public mirror to avoid Docker Hub rate limits
+FROM --platform=$BUILDPLATFORM public.ecr.aws/docker/library/golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
@@ -23,9 +24,8 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
 
-# Download dependencies and build
-RUN go mod download && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+# Build directly (go build will handle downloads and workspace resolution)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
     -o /out/rediver-agent \
@@ -34,7 +34,7 @@ RUN go mod download && \
 # -----------------------------------------------------------------------------
 # Stage 2: Tools (shared for full & ci) - multi-arch aware
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS tools
+FROM public.ecr.aws/docker/library/python:3.12-slim AS tools
 
 ARG TARGETARCH
 ARG SEMGREP_VERSION=1.93.0
@@ -91,7 +91,7 @@ CMD ["--help"]
 # -----------------------------------------------------------------------------
 # Target: FULL (all tools, non-root)
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS full
+FROM public.ecr.aws/docker/library/python:3.12-slim AS full
 
 LABEL org.opencontainers.image.title="Rediver Agent"
 LABEL org.opencontainers.image.description="Security scanning agent with semgrep, gitleaks, trivy"
@@ -127,7 +127,7 @@ CMD ["--help"]
 # -----------------------------------------------------------------------------
 # Target: CI (full + trivy DB preloaded + CI-friendly defaults)
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS ci
+FROM public.ecr.aws/docker/library/python:3.12-slim AS ci
 
 LABEL org.opencontainers.image.title="Rediver Agent CI"
 LABEL org.opencontainers.image.description="CI-optimized security scanning agent (preloaded Trivy DB)"
