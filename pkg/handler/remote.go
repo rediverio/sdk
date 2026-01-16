@@ -16,7 +16,6 @@ import (
 type RemoteHandler struct {
 	pusher  core.Pusher
 	gitEnv  gitenv.GitEnv
-	scanID  string
 	verbose bool
 
 	// Comment settings

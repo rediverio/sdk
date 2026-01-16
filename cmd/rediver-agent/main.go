@@ -361,7 +361,9 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 			})
 
 			if err != nil {
-				scanHandler.OnError(err)
+				if hErr := scanHandler.OnError(err); hErr != nil {
+					fmt.Fprintf(os.Stderr, "[%s] OnError handler failed: %v\n", scanner.Name(), hErr)
+				}
 				fmt.Fprintf(os.Stderr, "[%s] Scan failed: %v\n", scanner.Name(), err)
 				continue
 			}
@@ -433,7 +435,9 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 		}
 
 		// Notify handler of scan completion
-		scanHandler.OnCompleted()
+		if err := scanHandler.OnCompleted(); err != nil {
+			fmt.Fprintf(os.Stderr, "OnCompleted handler failed: %v\n", err)
+		}
 	}
 
 	// Output JSON if requested
@@ -911,14 +915,13 @@ func checkAndInstallTools(ctx context.Context, install, verbose bool) {
 	osType := detectOS()
 
 	var missingTools []ToolInfo
-	var installedTools []ToolInfo
 
 	for _, tool := range NativeTools {
 		installed, version, _ := checkBinaryInstalled(ctx, tool.Binary)
 
 		if installed {
 			fmt.Printf("  ✓ %-12s %s (installed: %s)\n", tool.Name, tool.Description, version)
-			installedTools = append(installedTools, tool)
+			// installedTools = append(installedTools, tool)
 		} else {
 			fmt.Printf("  ✗ %-12s %s (NOT INSTALLED)\n", tool.Name, tool.Description)
 			missingTools = append(missingTools, tool)

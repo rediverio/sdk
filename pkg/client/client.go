@@ -495,6 +495,11 @@ func (c *Client) convertToIngestInput(report *ris.Report) *IngestInput {
 // generateID generates a random ID string.
 func generateID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback or panic? For ID generation, we usually expect it to work.
+		// Given the signature can't satisfy panic easily without crashing.
+		// We'll panic here as crypto/rand failure is critical.
+		panic(fmt.Sprintf("failed to generate ID: %v", err))
+	}
 	return hex.EncodeToString(b)
 }
