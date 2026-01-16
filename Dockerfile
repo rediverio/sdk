@@ -23,13 +23,8 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
 
-# Private repo: skip module proxy and use local source
-ENV GOPRIVATE=github.com/rediverio/*
-
 # Download dependencies and build
-# Remove go.sum to force fresh tidy inside container
-RUN rm -f go.sum && \
-    go mod tidy && \
+RUN go mod download && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
