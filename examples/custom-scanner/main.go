@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rediverio/rediver-sdk/sdk/client"
-	"github.com/rediverio/rediver-sdk/sdk/core"
+	"github.com/rediverio/rediver-sdk/pkg/client"
+	"github.com/rediverio/rediver-sdk/pkg/core"
 )
 
 // =============================================================================

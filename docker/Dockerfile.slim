@@ -1,0 +1,50 @@
+# =============================================================================
+# Rediver Agent - Slim Image (No Pre-installed Tools)
+# =============================================================================
+# Minimal image containing only the rediver-agent binary.
+# Security tools must be:
+# - Mounted from host: -v /usr/local/bin/semgrep:/usr/local/bin/semgrep
+# - Or installed at runtime
+#
+# Usage:
+#   docker build -t rediver-agent:slim -f docker/Dockerfile.slim .
+#   docker run --rm -v $(pwd):/scan -v /usr/local/bin/semgrep:/usr/local/bin/semgrep \
+#       rediver-agent:slim -tool semgrep -target /scan
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build
+# -----------------------------------------------------------------------------
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X main.appVersion=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
+    -o /build/rediver-agent \
+    ./cmd/rediver-agent
+
+# -----------------------------------------------------------------------------
+# Stage 2: Minimal runtime (distroless)
+# -----------------------------------------------------------------------------
+FROM gcr.io/distroless/static-debian12:nonroot
+
+LABEL org.opencontainers.image.title="Rediver Agent Slim"
+LABEL org.opencontainers.image.description="Minimal security scanning agent (tools not included)"
+
+# Copy binary
+COPY --from=builder /build/rediver-agent /usr/local/bin/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+WORKDIR /scan
+
+ENTRYPOINT ["rediver-agent"]
+CMD ["-help"]

@@ -1,0 +1,96 @@
+# =============================================================================
+# Docker Compose for Rediver Agent
+# =============================================================================
+# Local development and testing configuration
+#
+# Usage:
+#   # Build images
+#   docker compose -f docker/docker-compose.yml build
+#
+#   # Run scan on current directory
+#   docker compose -f docker/docker-compose.yml run --rm scan
+#
+#   # Run with specific tool
+#   docker compose -f docker/docker-compose.yml run --rm scan -tool semgrep -target /scan
+#
+#   # Run daemon mode
+#   docker compose -f docker/docker-compose.yml up -d agent
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Full agent with all tools (for scanning)
+  # ---------------------------------------------------------------------------
+  scan:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ../:/scan:ro                          # Mount source code (read-only)
+      - scan-cache:/cache                      # Persistent cache for trivy DB
+    environment:
+      - REDIVER_API_URL=${REDIVER_API_URL:-}
+      - REDIVER_API_KEY=${REDIVER_API_KEY:-}
+      - REDIVER_WORKER_ID=${REDIVER_WORKER_ID:-}
+      - SEMGREP_SEND_METRICS=off
+    working_dir: /scan
+    command: ["-tools", "semgrep,gitleaks,trivy", "-target", "/scan", "-verbose"]
+
+  # ---------------------------------------------------------------------------
+  # Daemon mode agent
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ../:/scan:ro
+      - ./config.yaml:/config/config.yaml:ro  # Mount config file
+      - scan-cache:/cache
+    environment:
+      - REDIVER_API_URL=${REDIVER_API_URL}
+      - REDIVER_API_KEY=${REDIVER_API_KEY}
+      - REDIVER_WORKER_ID=${REDIVER_WORKER_ID}
+    restart: unless-stopped
+    command: ["-daemon", "-config", "/config/config.yaml"]
+
+  # ---------------------------------------------------------------------------
+  # Slim image (tools mounted from host)
+  # ---------------------------------------------------------------------------
+  slim:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.slim
+    volumes:
+      - ../:/scan:ro
+      # Mount tools from host if available
+      - /usr/local/bin/semgrep:/usr/local/bin/semgrep:ro
+      - /usr/local/bin/gitleaks:/usr/local/bin/gitleaks:ro
+      - /usr/local/bin/trivy:/usr/local/bin/trivy:ro
+    working_dir: /scan
+    command: ["-check-tools"]
+
+  # ---------------------------------------------------------------------------
+  # CI simulation (for testing CI behavior locally)
+  # ---------------------------------------------------------------------------
+  ci:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ci
+    volumes:
+      - ../:/github/workspace:ro
+    environment:
+      # Simulate GitHub Actions environment
+      - GITHUB_ACTIONS=true
+      - GITHUB_SHA=abc123
+      - GITHUB_REF_NAME=main
+      - GITHUB_REPOSITORY=rediverio/rediver-sdk
+      - REDIVER_API_URL=${REDIVER_API_URL:-}
+      - REDIVER_API_KEY=${REDIVER_API_KEY:-}
+    working_dir: /github/workspace
+    command: ["-tools", "semgrep,gitleaks,trivy", "-target", ".", "-auto-ci", "-verbose"]
+
+# Persistent volumes
+volumes:
+  scan-cache:
+    name: rediver-scan-cache

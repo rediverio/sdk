@@ -14,16 +14,16 @@ import (
 	"os"
 	"time"
 
-	"github.com/rediverio/rediver-sdk/sdk/client"
-	"github.com/rediverio/rediver-sdk/sdk/core"
-	"github.com/rediverio/rediver-sdk/sdk/ris"
+	"github.com/rediverio/rediver-sdk/pkg/client"
+	"github.com/rediverio/rediver-sdk/pkg/core"
+	"github.com/rediverio/rediver-sdk/pkg/ris"
 )
 
 func main() {
 	// Parse command line flags
 	baseURL := flag.String("url", "http://localhost:8080", "Rediver API base URL")
 	apiKey := flag.String("api-key", "", "API key for authentication")
-	sourceID := flag.String("source-id", "", "Source ID (optional)")
+	workerID := flag.String("worker-id", "", "Worker ID (optional)")
 	verbose := flag.Bool("verbose", true, "Enable verbose output")
 	flag.Parse()
 
@@ -40,7 +40,7 @@ func main() {
 	cfg := &client.Config{
 		BaseURL:    *baseURL,
 		APIKey:     *apiKey,
-		SourceID:   *sourceID,
+		WorkerID:   *workerID,
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
 		RetryDelay: 2 * time.Second,
@@ -104,11 +104,11 @@ func main() {
 
 func testHeartbeat(ctx context.Context, c *client.Client) error {
 	status := &core.AgentStatus{
-		Name:    "integration-test",
-		Status:  core.AgentStateRunning,
-		Message: "Integration test running",
+		Name:     "integration-test",
+		Status:   core.AgentStateRunning,
+		Message:  "Integration test running",
 		Scanners: []string{"semgrep", "trivy"},
-		Uptime:  100,
+		Uptime:   100,
 	}
 
 	return c.SendHeartbeat(ctx, status)
@@ -379,15 +379,15 @@ func createCombinedReport() *ris.Report {
 			RuleID:      "CVE-2024-1234",
 			AssetRef:    "container-1", // Reference to asset
 			Vulnerability: &ris.VulnerabilityDetails{
-				CVEID:           "CVE-2024-1234",
-				CWEID:           "CWE-119",
-				CVSSVersion:     "3.1",
-				CVSSScore:       9.8,
-				CVSSVector:      "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-				Package:         "openssl",
-				AffectedVersion: "1.1.1",
-				FixedVersion:    "1.1.1w",
-				Ecosystem:       "debian",
+				CVEID:            "CVE-2024-1234",
+				CWEID:            "CWE-119",
+				CVSSVersion:      "3.1",
+				CVSSScore:        9.8,
+				CVSSVector:       "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+				Package:          "openssl",
+				AffectedVersion:  "1.1.1",
+				FixedVersion:     "1.1.1w",
+				Ecosystem:        "debian",
 				ExploitAvailable: true,
 			},
 			Remediation: &ris.Remediation{
@@ -396,12 +396,12 @@ func createCombinedReport() *ris.Report {
 			},
 		},
 		{
-			ID:          "vuln-2",
-			Type:        ris.FindingTypeVulnerability,
-			Title:       "CVE-2024-5678: High severity in curl",
-			Severity:    ris.SeverityHigh,
-			RuleID:      "CVE-2024-5678",
-			AssetRef:    "container-1",
+			ID:       "vuln-2",
+			Type:     ris.FindingTypeVulnerability,
+			Title:    "CVE-2024-5678: High severity in curl",
+			Severity: ris.SeverityHigh,
+			RuleID:   "CVE-2024-5678",
+			AssetRef: "container-1",
 			Vulnerability: &ris.VulnerabilityDetails{
 				CVEID:           "CVE-2024-5678",
 				CVSSScore:       7.5,

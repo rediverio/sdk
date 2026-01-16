@@ -15,21 +15,29 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/rediverio/rediver-sdk/sdk/client"
-	"github.com/rediverio/rediver-sdk/sdk/core"
-	"github.com/rediverio/rediver-sdk/sdk/ris"
+	"github.com/rediverio/rediver-sdk/pkg/client"
+	"github.com/rediverio/rediver-sdk/pkg/core"
+	"github.com/rediverio/rediver-sdk/pkg/gitenv"
+	"github.com/rediverio/rediver-sdk/pkg/handler"
+	"github.com/rediverio/rediver-sdk/pkg/ris"
+	"github.com/rediverio/rediver-sdk/pkg/scanners"
+	"github.com/rediverio/rediver-sdk/pkg/strategy"
 )
 
 const (
@@ -56,7 +64,7 @@ type Config struct {
 	Rediver struct {
 		BaseURL  string        `yaml:"base_url"`
 		APIKey   string        `yaml:"api_key"`
-		SourceID string        `yaml:"source_id"` // For tenant tracking
+		WorkerID string        `yaml:"worker_id"` // For tenant tracking
 		Timeout  time.Duration `yaml:"timeout"`
 	} `yaml:"rediver"`
 
@@ -96,7 +104,7 @@ func main() {
 	target := flag.String("target", ".", "Target directory to scan")
 	apiURL := flag.String("api-url", "", "Rediver API URL (or REDIVER_API_URL env)")
 	apiKey := flag.String("api-key", "", "Rediver API key (or REDIVER_API_KEY env)")
-	sourceID := flag.String("source-id", "", "Source ID for tracking (or REDIVER_SOURCE_ID env)")
+	workerID := flag.String("worker-id", "", "Worker ID for tracking (or REDIVER_WORKER_ID env)")
 	push := flag.Bool("push", false, "Push results to Rediver")
 	daemon := flag.Bool("daemon", false, "Run in daemon mode")
 	enableCommands := flag.Bool("enable-commands", false, "Enable server command polling (daemon mode)")
@@ -106,6 +114,10 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version")
 	outputJSON := flag.Bool("json", false, "Output results as JSON")
 	outputFile := flag.String("output", "", "Output file path (instead of stdout)")
+	createComments := flag.Bool("comments", false, "Create PR/MR inline comments for findings")
+	autoDetectCI := flag.Bool("auto-ci", true, "Auto-detect CI environment (GitHub Actions, GitLab CI)")
+	checkTools := flag.Bool("check-tools", false, "Check if required tools are installed and show installation instructions")
+	installTools := flag.Bool("install-tools", false, "Interactively install missing tools (requires sudo for some tools)")
 
 	flag.Parse()
 
@@ -115,17 +127,35 @@ func main() {
 	}
 
 	if *listTools {
-		fmt.Println("Available preset scanners:")
+		fmt.Println("Available scanners:")
 		fmt.Println()
+		fmt.Println("  Native scanners (recommended):")
+		fmt.Printf("    %-15s - %s\n", "semgrep", "SAST scanner with dataflow/taint tracking")
+		fmt.Printf("    %-15s - %s\n", "gitleaks", "Secret detection scanner")
+		fmt.Printf("    %-15s - %s\n", "trivy", "SCA vulnerability scanner (filesystem)")
+		fmt.Printf("    %-15s - %s\n", "trivy-config", "IaC misconfiguration scanner")
+		fmt.Printf("    %-15s - %s\n", "trivy-image", "Container image scanner")
+		fmt.Printf("    %-15s - %s\n", "trivy-full", "Full scanner (vuln + misconfig + secret)")
+		fmt.Println()
+		fmt.Println("  Preset scanners:")
 		for _, name := range core.ListPresetScanners() {
 			cfg := core.PresetScanners[name]
-			fmt.Printf("  %-15s - %s\n", name, strings.Join(cfg.Capabilities, ", "))
+			fmt.Printf("    %-15s - %s\n", name, strings.Join(cfg.Capabilities, ", "))
 		}
 		fmt.Println()
 		fmt.Println("Usage examples:")
 		fmt.Println("  rediver-agent -tool semgrep -target ./src -push")
-		fmt.Println("  rediver-agent -tools semgrep,gitleaks -target . -push")
+		fmt.Println("  rediver-agent -tools semgrep,gitleaks,trivy -target . -push")
 		fmt.Println("  rediver-agent -daemon -config agent.yaml")
+		fmt.Println()
+		fmt.Println("Check tool installation:")
+		fmt.Println("  rediver-agent -check-tools")
+		fmt.Println("  rediver-agent -install-tools")
+		os.Exit(0)
+	}
+
+	if *checkTools || *installTools {
+		checkAndInstallTools(context.Background(), *installTools, *verbose)
 		os.Exit(0)
 	}
 
@@ -159,7 +189,7 @@ func main() {
 		// API config from flags or env
 		cfg.Rediver.BaseURL = getEnvOrFlag(*apiURL, "REDIVER_API_URL")
 		cfg.Rediver.APIKey = getEnvOrFlag(*apiKey, "REDIVER_API_KEY")
-		cfg.Rediver.SourceID = getEnvOrFlag(*sourceID, "REDIVER_SOURCE_ID")
+		cfg.Rediver.WorkerID = getEnvOrFlag(*workerID, "REDIVER_WORKER_ID")
 		cfg.Targets = []string{*target}
 
 		// Parse tools
@@ -190,7 +220,7 @@ func main() {
 		apiClient = client.New(&client.Config{
 			BaseURL:  cfg.Rediver.BaseURL,
 			APIKey:   cfg.Rediver.APIKey,
-			SourceID: cfg.Rediver.SourceID,
+			WorkerID: cfg.Rediver.WorkerID,
 			Timeout:  cfg.Rediver.Timeout,
 			Verbose:  cfg.Agent.Verbose,
 		})
@@ -201,8 +231,8 @@ func main() {
 			fmt.Printf("Warning: Could not connect to Rediver API: %v\n", err)
 		} else if cfg.Agent.Verbose {
 			fmt.Println("Connected to Rediver API")
-			if cfg.Rediver.SourceID != "" {
-				fmt.Printf("Source ID: %s\n", cfg.Rediver.SourceID)
+			if cfg.Rediver.WorkerID != "" {
+				fmt.Printf("Worker ID: %s\n", cfg.Rediver.WorkerID)
 			}
 		}
 	} else if *push && !*standalone {
@@ -214,7 +244,7 @@ func main() {
 	if *daemon {
 		runDaemon(ctx, &cfg, apiClient, pusher)
 	} else {
-		runOnce(ctx, &cfg, pusher, *push, *outputJSON, *outputFile)
+		runOnce(ctx, &cfg, pusher, *push, *outputJSON, *outputFile, *createComments, *autoDetectCI)
 	}
 }
 
@@ -241,9 +271,40 @@ func loadConfig(path string, cfg *Config) error {
 	return nil
 }
 
-func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJSON bool, outputFile string) {
+func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJSON bool, outputFile string, createComments, autoDetectCI bool) {
 	parsers := core.NewParserRegistry()
 	var allReports []*ris.Report
+
+	// Auto-detect CI environment
+	var ciEnv gitenv.GitEnv
+	if autoDetectCI {
+		ciEnv = gitenv.DetectWithVerbose(cfg.Agent.Verbose)
+		if ciEnv != nil && cfg.Agent.Verbose {
+			fmt.Printf("[CI] Detected: %s\n", ciEnv.Provider())
+			if ciEnv.ProjectName() != "" {
+				fmt.Printf("[CI] Repository: %s\n", ciEnv.ProjectName())
+			}
+			if ciEnv.CommitBranch() != "" {
+				fmt.Printf("[CI] Branch: %s\n", ciEnv.CommitBranch())
+			}
+			if ciEnv.MergeRequestID() != "" {
+				fmt.Printf("[CI] MR/PR: #%s\n", ciEnv.MergeRequestID())
+			}
+		}
+	}
+
+	// Create scan handler
+	var scanHandler handler.ScanHandler
+	if push && pusher != nil {
+		scanHandler = handler.NewRemoteHandler(&handler.RemoteHandlerConfig{
+			Pusher:         pusher,
+			Verbose:        cfg.Agent.Verbose,
+			CreateComments: createComments,
+			MaxComments:    10,
+		})
+	} else {
+		scanHandler = handler.NewConsoleHandler(cfg.Agent.Verbose)
+	}
 
 	for _, scannerCfg := range cfg.Scanners {
 		if !scannerCfg.Enabled {
@@ -268,9 +329,31 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 			fmt.Printf("[%s] Version: %s\n", scanner.Name(), version)
 		}
 
+		// Notify handler of scan start
+		scanInfo, err := scanHandler.OnStart(ciEnv, scanner.Name(), "sast")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[%s] Handler OnStart failed: %v\n", scanner.Name(), err)
+		}
+		_ = scanInfo // May contain LastCommitSha for baseline
+
 		// Scan each target
 		for _, target := range cfg.Targets {
 			fmt.Printf("[%s] Scanning %s...\n", scanner.Name(), target)
+
+			// Determine scan strategy based on CI context
+			scanCtx := &strategy.ScanContext{
+				GitEnv:   ciEnv,
+				RepoPath: target,
+				Verbose:  cfg.Agent.Verbose,
+			}
+			scanStrategy, changedFiles := strategy.DetermineStrategy(scanCtx)
+
+			if cfg.Agent.Verbose {
+				fmt.Printf("[%s] Strategy: %s\n", scanner.Name(), scanStrategy.String())
+				if scanStrategy == strategy.ChangedFileOnly {
+					fmt.Printf("[%s] Changed files: %d\n", scanner.Name(), len(changedFiles))
+				}
+			}
 
 			result, err := scanner.Scan(ctx, target, &core.ScanOptions{
 				TargetDir: target,
@@ -278,6 +361,7 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 			})
 
 			if err != nil {
+				scanHandler.OnError(err)
 				fmt.Fprintf(os.Stderr, "[%s] Scan failed: %v\n", scanner.Name(), err)
 				continue
 			}
@@ -295,8 +379,32 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 				continue
 			}
 
+			// Detect asset - prefer CI environment info over local git
+			var assetType ris.AssetType
+			var assetValue string
+			var branch string
+
+			if ciEnv != nil && ciEnv.ProjectName() != "" {
+				assetType = ris.AssetTypeRepository
+				assetValue = ciEnv.ProjectName()
+				branch = ciEnv.CommitBranch()
+			} else {
+				assetType, assetValue = detectAsset(target)
+				branch = detectGitBranch(target)
+			}
+
+			if cfg.Agent.Verbose && assetValue != "" {
+				fmt.Printf("[%s] Asset: %s (%s)\n", scanner.Name(), assetValue, assetType)
+				if branch != "" {
+					fmt.Printf("[%s] Branch: %s\n", scanner.Name(), branch)
+				}
+			}
+
 			report, err := parser.Parse(ctx, result.RawOutput, &core.ParseOptions{
-				ToolName: scanner.Name(),
+				ToolName:   scanner.Name(),
+				AssetType:  assetType,
+				AssetValue: assetValue,
+				Branch:     branch,
 			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[%s] Parse error: %v\n", scanner.Name(), err)
@@ -310,18 +418,22 @@ func runOnce(ctx context.Context, cfg *Config, pusher core.Pusher, push, outputJ
 				printSummary(scanner.Name(), report)
 			}
 
-			// Push to Rediver
-			if push && pusher != nil && len(report.Findings) > 0 {
-				fmt.Printf("[%s] Pushing %d findings to Rediver...\n", scanner.Name(), len(report.Findings))
-				pushResult, err := pusher.PushFindings(ctx, report)
+			// Handle findings via handler (push + PR comments)
+			if len(report.Findings) > 0 {
+				err = scanHandler.HandleFindings(handler.HandleFindingsParams{
+					Report:       report,
+					Strategy:     scanStrategy,
+					ChangedFiles: changedFiles,
+					GitEnv:       ciEnv,
+				})
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "[%s] Push failed: %v\n", scanner.Name(), err)
-				} else {
-					fmt.Printf("[%s] Pushed: %d created, %d updated\n",
-						scanner.Name(), pushResult.FindingsCreated, pushResult.FindingsUpdated)
+					fmt.Fprintf(os.Stderr, "[%s] HandleFindings failed: %v\n", scanner.Name(), err)
 				}
 			}
 		}
+
+		// Notify handler of scan completion
+		scanHandler.OnCompleted()
 	}
 
 	// Output JSON if requested
@@ -484,8 +596,8 @@ func runDaemon(ctx context.Context, cfg *Config, apiClient *client.Client, pushe
 		fmt.Printf("  Scan interval: %s\n", cfg.Agent.ScanInterval)
 	}
 	fmt.Printf("  Heartbeat: %s\n", cfg.Agent.HeartbeatInterval)
-	if cfg.Rediver.SourceID != "" {
-		fmt.Printf("  Source ID: %s\n", cfg.Rediver.SourceID)
+	if cfg.Rediver.WorkerID != "" {
+		fmt.Printf("  Worker ID: %s\n", cfg.Rediver.WorkerID)
 	}
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("\nPress Ctrl+C to stop.")
@@ -519,7 +631,59 @@ func getMode(cfg *Config) string {
 }
 
 func getScanner(cfg ScannerConfig, verbose bool) (core.Scanner, error) {
-	// Try preset first
+	// Try native scanners first (better support for dataflow, native JSON, etc.)
+	switch cfg.Name {
+	case "semgrep":
+		scanner := scanners.Semgrep()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		return scanner, nil
+
+	case "gitleaks":
+		scanner := scanners.Gitleaks()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		// Wrap gitleaks in adapter to implement core.Scanner
+		return &gitleaksAdapter{scanner}, nil
+
+	case "trivy", "trivy-fs":
+		scanner := scanners.TrivyFS()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		return scanner, nil
+
+	case "trivy-config":
+		scanner := scanners.TrivyConfig()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		return scanner, nil
+
+	case "trivy-image":
+		scanner := scanners.TrivyImage()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		return scanner, nil
+
+	case "trivy-full":
+		scanner := scanners.TrivyFull()
+		scanner.Verbose = verbose
+		if cfg.Binary != "" {
+			scanner.Binary = cfg.Binary
+		}
+		return scanner, nil
+	}
+
+	// Fall back to generic preset scanner
 	scanner, err := core.NewPresetScanner(cfg.Name)
 	if err == nil {
 		scanner.SetVerbose(verbose)
@@ -539,6 +703,15 @@ func getScanner(cfg ScannerConfig, verbose bool) (core.Scanner, error) {
 	}
 
 	return nil, fmt.Errorf("unknown scanner: %s (use -list-tools to see available)", cfg.Name)
+}
+
+// gitleaksAdapter wraps gitleaks.Scanner to implement core.Scanner interface.
+type gitleaksAdapter struct {
+	*scanners.GitleaksScanner
+}
+
+func (a *gitleaksAdapter) Scan(ctx context.Context, target string, opts *core.ScanOptions) (*core.ScanResult, error) {
+	return a.GitleaksScanner.GenericScan(ctx, target, opts)
 }
 
 func getCollector(cfg CollectorConfig, verbose bool) (core.Collector, error) {
@@ -576,4 +749,380 @@ func printSummary(scanner string, report *ris.Report) {
 			}
 		}
 	}
+}
+
+// detectAsset detects the asset type and value from a target directory.
+func detectAsset(target string) (ris.AssetType, string) {
+	// Resolve to absolute path
+	absPath, err := filepath.Abs(target)
+	if err != nil {
+		absPath = target
+	}
+
+	// Check if it's a git repository
+	gitConfigPath := filepath.Join(absPath, ".git", "config")
+	if _, err := os.Stat(gitConfigPath); err == nil {
+		// Read git config to get remote URL
+		if remoteURL := readGitRemoteURL(gitConfigPath); remoteURL != "" {
+			return ris.AssetTypeRepository, normalizeGitURL(remoteURL)
+		}
+	}
+
+	// Default to using the directory name
+	dirName := filepath.Base(absPath)
+	return ris.AssetTypeRepository, dirName
+}
+
+// readGitRemoteURL reads the origin remote URL from a git config file.
+func readGitRemoteURL(configPath string) string {
+	file, err := os.Open(configPath)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	inRemoteOrigin := false
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "[remote \"origin\"]" {
+			inRemoteOrigin = true
+			continue
+		}
+
+		if inRemoteOrigin {
+			if strings.HasPrefix(line, "[") {
+				// Reached next section
+				break
+			}
+			if strings.HasPrefix(line, "url = ") {
+				return strings.TrimPrefix(line, "url = ")
+			}
+		}
+	}
+
+	return ""
+}
+
+// normalizeGitURL normalizes a git URL to a standard format.
+func normalizeGitURL(url string) string {
+	// Convert SSH URLs to HTTPS-like format
+	// git@github.com:org/repo.git -> github.com/org/repo
+	if after, ok := strings.CutPrefix(url, "git@"); ok {
+		url = after
+		url = strings.Replace(url, ":", "/", 1)
+	}
+
+	// Remove https:// or http://
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "http://")
+
+	// Remove .git suffix
+	url = strings.TrimSuffix(url, ".git")
+
+	// Remove trailing slash
+	url = strings.TrimSuffix(url, "/")
+
+	return url
+}
+
+// detectGitBranch detects the current git branch from a target directory.
+func detectGitBranch(target string) string {
+	// Resolve to absolute path
+	absPath, err := filepath.Abs(target)
+	if err != nil {
+		absPath = target
+	}
+
+	// Try to read .git/HEAD file
+	headPath := filepath.Join(absPath, ".git", "HEAD")
+	content, err := os.ReadFile(headPath)
+	if err != nil {
+		return ""
+	}
+
+	headContent := strings.TrimSpace(string(content))
+
+	// HEAD file contains either:
+	// 1. "ref: refs/heads/branch-name" (normal branch)
+	// 2. A commit hash (detached HEAD)
+	if after, ok := strings.CutPrefix(headContent, "ref: refs/heads/"); ok {
+		return after
+	}
+
+	// Detached HEAD - return short commit hash
+	if len(headContent) >= 7 {
+		return headContent[:7]
+	}
+
+	return ""
+}
+
+// ToolInfo contains information about a scanner tool.
+type ToolInfo struct {
+	Name           string
+	Description    string
+	Binary         string
+	InstallMacOS   string
+	InstallLinux   string
+	InstallWindows string
+	InstallURL     string
+}
+
+// NativeTools defines the native scanners with installation info.
+var NativeTools = []ToolInfo{
+	{
+		Name:           "semgrep",
+		Description:    "SAST scanner with dataflow/taint tracking",
+		Binary:         "semgrep",
+		InstallMacOS:   "brew install semgrep",
+		InstallLinux:   "pip install semgrep",
+		InstallWindows: "pip install semgrep",
+		InstallURL:     "https://semgrep.dev/docs/getting-started/",
+	},
+	{
+		Name:           "gitleaks",
+		Description:    "Secret detection scanner",
+		Binary:         "gitleaks",
+		InstallMacOS:   "brew install gitleaks",
+		InstallLinux:   "brew install gitleaks  # or download from GitHub releases",
+		InstallWindows: "choco install gitleaks",
+		InstallURL:     "https://github.com/gitleaks/gitleaks#installing",
+	},
+	{
+		Name:           "trivy",
+		Description:    "SCA/Container/IaC scanner",
+		Binary:         "trivy",
+		InstallMacOS:   "brew install trivy",
+		InstallLinux:   "sudo apt-get install trivy  # or brew install trivy",
+		InstallWindows: "choco install trivy",
+		InstallURL:     "https://aquasecurity.github.io/trivy/latest/getting-started/installation/",
+	},
+}
+
+// checkAndInstallTools checks tool installation status and optionally installs them.
+func checkAndInstallTools(ctx context.Context, install, verbose bool) {
+	fmt.Println("Checking scanner tools installation...")
+	fmt.Println()
+
+	// Detect OS
+	osType := detectOS()
+
+	var missingTools []ToolInfo
+	var installedTools []ToolInfo
+
+	for _, tool := range NativeTools {
+		installed, version, _ := checkBinaryInstalled(ctx, tool.Binary)
+
+		if installed {
+			fmt.Printf("  ✓ %-12s %s (installed: %s)\n", tool.Name, tool.Description, version)
+			installedTools = append(installedTools, tool)
+		} else {
+			fmt.Printf("  ✗ %-12s %s (NOT INSTALLED)\n", tool.Name, tool.Description)
+			missingTools = append(missingTools, tool)
+		}
+	}
+
+	fmt.Println()
+
+	if len(missingTools) == 0 {
+		fmt.Println("All tools are installed! Ready to scan.")
+		return
+	}
+
+	fmt.Printf("Missing %d tool(s).\n\n", len(missingTools))
+
+	if install {
+		// Interactive installation
+		installToolsInteractive(ctx, missingTools, osType)
+	} else {
+		// Show installation instructions
+		fmt.Println("Installation instructions:")
+		fmt.Println()
+
+		for _, tool := range missingTools {
+			fmt.Printf("  %s:\n", tool.Name)
+			switch osType {
+			case "darwin":
+				fmt.Printf("    macOS:   %s\n", tool.InstallMacOS)
+			case "linux":
+				fmt.Printf("    Linux:   %s\n", tool.InstallLinux)
+			case "windows":
+				fmt.Printf("    Windows: %s\n", tool.InstallWindows)
+			default:
+				fmt.Printf("    macOS:   %s\n", tool.InstallMacOS)
+				fmt.Printf("    Linux:   %s\n", tool.InstallLinux)
+				fmt.Printf("    Windows: %s\n", tool.InstallWindows)
+			}
+			fmt.Printf("    Docs:    %s\n", tool.InstallURL)
+			fmt.Println()
+		}
+
+		fmt.Println("Run with -install-tools to install interactively.")
+	}
+}
+
+// installToolsInteractive installs missing tools interactively.
+func installToolsInteractive(ctx context.Context, tools []ToolInfo, osType string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	for _, tool := range tools {
+		var installCmd string
+		switch osType {
+		case "darwin":
+			installCmd = tool.InstallMacOS
+		case "linux":
+			installCmd = tool.InstallLinux
+		case "windows":
+			installCmd = tool.InstallWindows
+		default:
+			installCmd = tool.InstallMacOS
+		}
+
+		fmt.Printf("Install %s? [y/N] ", tool.Name)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input != "y" && input != "yes" {
+			fmt.Printf("  Skipped %s\n\n", tool.Name)
+			continue
+		}
+
+		fmt.Printf("  Installing %s...\n", tool.Name)
+		fmt.Printf("  Command: %s\n", installCmd)
+
+		// Parse and execute command
+		parts := strings.Fields(installCmd)
+		if len(parts) == 0 {
+			fmt.Printf("  Error: invalid install command\n\n")
+			continue
+		}
+
+		// Execute the install command
+		cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("  Error installing %s: %v\n", tool.Name, err)
+			fmt.Printf("  Please install manually: %s\n\n", tool.InstallURL)
+			continue
+		}
+
+		// Verify installation
+		installed, version, _ := checkBinaryInstalled(ctx, tool.Binary)
+		if installed {
+			fmt.Printf("  ✓ %s installed successfully (version: %s)\n\n", tool.Name, version)
+		} else {
+			fmt.Printf("  Warning: %s may not be in PATH. Please verify installation.\n\n", tool.Name)
+		}
+	}
+}
+
+// detectOS detects the current operating system.
+func detectOS() string {
+	return runtime.GOOS
+}
+
+// checkBinaryInstalled checks if a binary is installed.
+func checkBinaryInstalled(ctx context.Context, binary string) (bool, string, error) {
+	cmd := exec.CommandContext(ctx, binary, "--version")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, "", err
+	}
+
+	// Parse version from output
+	version := parseToolVersion(binary, string(output))
+	return true, version, nil
+}
+
+// parseToolVersion extracts clean version string from tool output.
+func parseToolVersion(tool, output string) string {
+	output = strings.TrimSpace(output)
+	lines := strings.Split(output, "\n")
+
+	// Get first non-empty, non-warning line
+	var firstLine string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Skip warning lines
+		if strings.Contains(line, "WARNING") || strings.Contains(line, "warning") {
+			continue
+		}
+		firstLine = line
+		break
+	}
+
+	if firstLine == "" && len(lines) > 0 {
+		firstLine = strings.TrimSpace(lines[0])
+	}
+
+	// Tool-specific parsing
+	switch tool {
+	case "semgrep":
+		// semgrep output is noisy - version is usually the last line that looks like a version
+		// e.g., "1.135.0"
+		for i := len(lines) - 1; i >= 0; i-- {
+			line := strings.TrimSpace(lines[i])
+			if line == "" {
+				continue
+			}
+			if isVersionString(line) {
+				return line
+			}
+		}
+		// Fallback: try to find version in any line
+		for _, line := range lines {
+			for _, part := range strings.Fields(line) {
+				if isVersionString(part) {
+					return part
+				}
+			}
+		}
+		return firstLine
+
+	case "gitleaks":
+		// gitleaks output: "gitleaks version 8.28.0"
+		if strings.Contains(firstLine, "version") {
+			parts := strings.Fields(firstLine)
+			for i, p := range parts {
+				if p == "version" && i+1 < len(parts) {
+					return parts[i+1]
+				}
+			}
+		}
+		return firstLine
+
+	case "trivy":
+		// trivy output: "Version: 0.67.2"
+		if strings.HasPrefix(firstLine, "Version:") {
+			return strings.TrimSpace(strings.TrimPrefix(firstLine, "Version:"))
+		}
+		return firstLine
+
+	default:
+		return firstLine
+	}
+}
+
+// isVersionString checks if a string looks like a version number.
+func isVersionString(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	// Version strings typically start with a digit
+	if s[0] >= '0' && s[0] <= '9' {
+		return true
+	}
+	// Or start with 'v' followed by digit
+	if len(s) > 1 && s[0] == 'v' && s[1] >= '0' && s[1] <= '9' {
+		return true
+	}
+	return false
 }

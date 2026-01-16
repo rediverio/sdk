@@ -1,0 +1,416 @@
+package trivy
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/rediverio/rediver-sdk/pkg/core"
+	"github.com/rediverio/rediver-sdk/pkg/ris"
+)
+
+// Parser converts Trivy JSON output to RIS format.
+type Parser struct {
+	// Configuration
+	Verbose bool
+}
+
+// NewParser creates a new Trivy parser.
+func NewParser() *Parser {
+	return &Parser{}
+}
+
+// Name returns the parser name.
+func (p *Parser) Name() string {
+	return "trivy"
+}
+
+// SupportedFormats returns supported output formats.
+func (p *Parser) SupportedFormats() []string {
+	return []string{"json", "trivy"}
+}
+
+// CanParse checks if this parser can handle the data.
+func (p *Parser) CanParse(data []byte) bool {
+	// Try to parse as Trivy JSON
+	var report Report
+	if err := json.Unmarshal(data, &report); err != nil {
+		return false
+	}
+
+	// Check for Trivy-specific fields
+	return report.SchemaVersion > 0 || report.ArtifactType != "" || len(report.Results) > 0
+}
+
+// Parse converts Trivy JSON output to RIS report.
+func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+	var trivyReport Report
+	if err := json.Unmarshal(data, &trivyReport); err != nil {
+		return nil, fmt.Errorf("failed to parse trivy output: %w", err)
+	}
+
+	// Create RIS report
+	report := ris.NewReport()
+
+	// Set metadata
+	report.Metadata = ris.ReportMetadata{
+		ID:         fmt.Sprintf("trivy-%d", time.Now().Unix()),
+		Timestamp:  time.Now(),
+		SourceType: "scanner",
+	}
+
+	// Set tool info
+	report.Tool = &ris.Tool{
+		Name:         "trivy",
+		Vendor:       "Aqua Security",
+		Capabilities: p.inferCapabilities(&trivyReport),
+	}
+
+	// Parse artifact as asset if available
+	if trivyReport.ArtifactName != "" {
+		asset := p.parseArtifactAsAsset(&trivyReport, opts)
+		if asset != nil {
+			report.Assets = append(report.Assets, *asset)
+		}
+	}
+
+	// Parse results
+	for _, result := range trivyReport.Results {
+		// Parse vulnerabilities
+		for _, vuln := range result.Vulnerabilities {
+			finding := p.parseVulnerability(&result, &vuln, opts)
+			report.Findings = append(report.Findings, finding)
+		}
+
+		// Parse misconfigurations
+		for _, misconfig := range result.Misconfigurations {
+			finding := p.parseMisconfiguration(&result, &misconfig, opts)
+			report.Findings = append(report.Findings, finding)
+		}
+
+		// Parse secrets
+		for _, secret := range result.Secrets {
+			finding := p.parseSecret(&result, &secret, opts)
+			report.Findings = append(report.Findings, finding)
+		}
+	}
+
+	if p.Verbose {
+		fmt.Printf("[trivy-parser] Parsed %d findings from %s\n", len(report.Findings), trivyReport.ArtifactName)
+	}
+
+	return report, nil
+}
+
+// parseArtifactAsAsset converts Trivy artifact to RIS asset.
+func (p *Parser) parseArtifactAsAsset(report *Report, opts *core.ParseOptions) *ris.Asset {
+	if report.ArtifactName == "" {
+		return nil
+	}
+
+	assetType := ris.AssetTypeRepository
+	switch report.ArtifactType {
+	case "container_image":
+		assetType = ris.AssetTypeContainer
+	case "filesystem":
+		assetType = ris.AssetTypeRepository
+	case "repository":
+		assetType = ris.AssetTypeRepository
+	}
+
+	// Override with options if provided
+	if opts != nil && opts.AssetType != "" {
+		assetType = opts.AssetType
+	}
+
+	asset := &ris.Asset{
+		ID:    fmt.Sprintf("asset-%x", sha256.Sum256([]byte(report.ArtifactName)))[:16],
+		Type:  assetType,
+		Value: report.ArtifactName,
+		Name:  report.ArtifactName,
+	}
+
+	// Add metadata
+	if report.Metadata.OS != nil {
+		asset.Tags = append(asset.Tags, report.Metadata.OS.Family)
+	}
+
+	return asset
+}
+
+// parseVulnerability converts Trivy vulnerability to RIS finding.
+func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *core.ParseOptions) ris.Finding {
+	// Get CVSS info
+	cvssScore, cvssVector, cvssSource := GetBestCVSSScore(vuln.CVSS)
+
+	// Generate fingerprint
+	fingerprint := p.generateFingerprint(vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion, result.Target)
+
+	finding := ris.Finding{
+		ID:          vuln.VulnerabilityID,
+		Type:        ris.FindingTypeVulnerability,
+		Title:       p.buildVulnTitle(vuln),
+		Description: vuln.Description,
+		Severity:    ris.Severity(GetRISSeverity(vuln.Severity)),
+		Confidence:  100, // Trivy is deterministic
+		RuleID:      vuln.VulnerabilityID,
+		RuleName:    vuln.Title,
+		Category:    "vulnerability",
+		Fingerprint: fingerprint,
+	}
+
+	// Set location
+	if vuln.PkgPath != "" {
+		finding.Location = &ris.FindingLocation{
+			Path: vuln.PkgPath,
+		}
+	} else if result.Target != "" {
+		finding.Location = &ris.FindingLocation{
+			Path: result.Target,
+		}
+	}
+
+	// Set vulnerability details
+	finding.Vulnerability = &ris.VulnerabilityDetails{
+		CVEID:           vuln.VulnerabilityID,
+		CWEIDs:          vuln.CweIDs,
+		CVSSVersion:     p.getCVSSVersion(cvssVector),
+		CVSSScore:       cvssScore,
+		CVSSVector:      cvssVector,
+		CVSSSource:      cvssSource,
+		Package:         vuln.PkgName,
+		AffectedVersion: vuln.InstalledVersion,
+		FixedVersion:    vuln.FixedVersion,
+		Ecosystem:       result.Type,
+		PURL:            buildPURL(result.Type, vuln.PkgName, vuln.InstalledVersion),
+	}
+
+	// Set references
+	if vuln.PrimaryURL != "" {
+		finding.References = append(finding.References, vuln.PrimaryURL)
+	}
+	finding.References = append(finding.References, vuln.References...)
+
+	// Set remediation
+	if vuln.FixedVersion != "" {
+		finding.Remediation = &ris.Remediation{
+			Recommendation: fmt.Sprintf("Upgrade %s from %s to %s", vuln.PkgName, vuln.InstalledVersion, vuln.FixedVersion),
+			FixAvailable:   true,
+		}
+	}
+
+	// Set tags
+	finding.Tags = []string{"sca", result.Type}
+	if vuln.Status != "" {
+		finding.Tags = append(finding.Tags, vuln.Status)
+	}
+
+	return finding
+}
+
+// parseMisconfiguration converts Trivy misconfiguration to RIS finding.
+func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfiguration, opts *core.ParseOptions) ris.Finding {
+	// Skip PASS status
+	if misconfig.Status == "PASS" {
+		return ris.Finding{}
+	}
+
+	fingerprint := p.generateFingerprint(misconfig.ID, result.Target, misconfig.Type, misconfig.Message)
+
+	finding := ris.Finding{
+		ID:          misconfig.ID,
+		Type:        ris.FindingTypeMisconfiguration,
+		Title:       misconfig.Title,
+		Description: misconfig.Description,
+		Severity:    ris.Severity(GetRISSeverity(misconfig.Severity)),
+		Confidence:  100,
+		RuleID:      misconfig.ID,
+		RuleName:    misconfig.Title,
+		Category:    "misconfiguration",
+		Fingerprint: fingerprint,
+	}
+
+	// Set location
+	if misconfig.CauseMetadata.StartLine > 0 {
+		finding.Location = &ris.FindingLocation{
+			Path:      result.Target,
+			StartLine: misconfig.CauseMetadata.StartLine,
+			EndLine:   misconfig.CauseMetadata.EndLine,
+		}
+
+		// Add code snippet
+		if len(misconfig.CauseMetadata.Code.Lines) > 0 {
+			var snippet strings.Builder
+			for _, line := range misconfig.CauseMetadata.Code.Lines {
+				if line.IsCause {
+					snippet.WriteString(line.Content)
+					snippet.WriteString("\n")
+				}
+			}
+			finding.Location.Snippet = strings.TrimSuffix(snippet.String(), "\n")
+		}
+	} else {
+		finding.Location = &ris.FindingLocation{
+			Path: result.Target,
+		}
+	}
+
+	// Set misconfiguration details
+	finding.Misconfiguration = &ris.MisconfigurationDetails{
+		PolicyID:     misconfig.ID,
+		PolicyName:   misconfig.Title,
+		ResourceType: misconfig.Type,
+		ResourceName: misconfig.CauseMetadata.Resource,
+		Cause:        misconfig.Message,
+	}
+
+	// Set references
+	if misconfig.PrimaryURL != "" {
+		finding.References = append(finding.References, misconfig.PrimaryURL)
+	}
+	finding.References = append(finding.References, misconfig.References...)
+
+	// Set remediation
+	if misconfig.Resolution != "" {
+		finding.Remediation = &ris.Remediation{
+			Recommendation: misconfig.Resolution,
+		}
+	}
+
+	// Set message
+	if misconfig.Message != "" {
+		finding.Description = misconfig.Message
+	}
+
+	// Set tags
+	finding.Tags = []string{"iac", misconfig.Type}
+	if misconfig.CauseMetadata.Provider != "" {
+		finding.Tags = append(finding.Tags, misconfig.CauseMetadata.Provider)
+	}
+
+	return finding
+}
+
+// parseSecret converts Trivy secret to RIS finding.
+func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOptions) ris.Finding {
+	fingerprint := p.generateFingerprint(secret.RuleID, result.Target, fmt.Sprintf("%d", secret.StartLine), secret.Match)
+
+	finding := ris.Finding{
+		ID:          fmt.Sprintf("%s-%d", secret.RuleID, secret.StartLine),
+		Type:        ris.FindingTypeSecret,
+		Title:       secret.Title,
+		Description: fmt.Sprintf("Secret detected: %s", secret.Category),
+		Severity:    ris.Severity(GetRISSeverity(secret.Severity)),
+		Confidence:  100,
+		RuleID:      secret.RuleID,
+		RuleName:    secret.Title,
+		Category:    "secret",
+		Fingerprint: fingerprint,
+	}
+
+	// Set location
+	finding.Location = &ris.FindingLocation{
+		Path:      result.Target,
+		StartLine: secret.StartLine,
+		EndLine:   secret.EndLine,
+	}
+
+	// Add code snippet
+	if len(secret.Code.Lines) > 0 {
+		var snippet strings.Builder
+		for _, line := range secret.Code.Lines {
+			snippet.WriteString(line.Content)
+			snippet.WriteString("\n")
+		}
+		finding.Location.Snippet = strings.TrimSuffix(snippet.String(), "\n")
+	}
+
+	// Set secret details
+	finding.Secret = &ris.SecretDetails{
+		SecretType:  secret.Category,
+		MaskedValue: maskSecret(secret.Match),
+		Length:      len(secret.Match),
+	}
+
+	// Set tags
+	finding.Tags = []string{"secret", secret.Category}
+
+	return finding
+}
+
+// buildVulnTitle builds a title for vulnerability.
+func (p *Parser) buildVulnTitle(vuln *Vulnerability) string {
+	if vuln.Title != "" {
+		return fmt.Sprintf("%s: %s", vuln.VulnerabilityID, vuln.Title)
+	}
+	return fmt.Sprintf("%s in %s %s", vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion)
+}
+
+// generateFingerprint generates a unique fingerprint.
+func (p *Parser) generateFingerprint(parts ...string) string {
+	data := strings.Join(parts, ":")
+	hash := sha256.Sum256([]byte(data))
+	return fmt.Sprintf("%x", hash[:16])
+}
+
+// getCVSSVersion extracts CVSS version from vector.
+func (p *Parser) getCVSSVersion(vector string) string {
+	if strings.HasPrefix(vector, "CVSS:3.1") {
+		return "3.1"
+	}
+	if strings.HasPrefix(vector, "CVSS:3.0") {
+		return "3.0"
+	}
+	if strings.Contains(vector, "AV:") && !strings.HasPrefix(vector, "CVSS:") {
+		return "2.0"
+	}
+	return ""
+}
+
+// inferCapabilities infers tool capabilities from report.
+func (p *Parser) inferCapabilities(report *Report) []string {
+	caps := make(map[string]bool)
+
+	for _, result := range report.Results {
+		if len(result.Vulnerabilities) > 0 {
+			caps["vulnerability"] = true
+			caps["sca"] = true
+		}
+		if len(result.Misconfigurations) > 0 {
+			caps["misconfiguration"] = true
+			caps["iac"] = true
+		}
+		if len(result.Secrets) > 0 {
+			caps["secret_detection"] = true
+		}
+		if len(result.Licenses) > 0 {
+			caps["license_compliance"] = true
+		}
+	}
+
+	result := make([]string, 0, len(caps))
+	for cap := range caps {
+		result = append(result, cap)
+	}
+	return result
+}
+
+// maskSecret masks a secret value.
+func maskSecret(value string) string {
+	if len(value) <= 8 {
+		return "***"
+	}
+	return value[:4] + "..." + value[len(value)-4:]
+}
+
+// ParseJSONBytes parses Trivy JSON output from bytes.
+func ParseJSONBytes(data []byte) (*Report, error) {
+	var report Report
+	if err := json.Unmarshal(data, &report); err != nil {
+		return nil, fmt.Errorf("failed to parse trivy JSON: %w", err)
+	}
+	return &report, nil
+}

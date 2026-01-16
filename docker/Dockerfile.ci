@@ -1,0 +1,108 @@
+# =============================================================================
+# Rediver Agent - CI/CD Optimized Image
+# =============================================================================
+# Optimized for CI/CD pipelines with:
+# - All security tools pre-installed
+# - Git for diff-based scanning
+# - CI environment auto-detection
+# - Caching support
+#
+# Usage in GitHub Actions:
+#   - uses: docker://ghcr.io/rediverio/rediver-agent:ci
+#     with:
+#       args: -tools semgrep,gitleaks,trivy -target . -push -auto-ci
+#
+# Usage in GitLab CI:
+#   image: ghcr.io/rediverio/rediver-agent:ci
+#   script:
+#     - rediver-agent -tools semgrep,gitleaks,trivy -target . -push -auto-ci
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build
+# -----------------------------------------------------------------------------
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X main.appVersion=${VERSION}" \
+    -o /build/rediver-agent \
+    ./cmd/rediver-agent
+
+# -----------------------------------------------------------------------------
+# Stage 2: Tools installation
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim AS tools
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Semgrep
+RUN pip install --no-cache-dir semgrep
+
+# Gitleaks
+ARG GITLEAKS_VERSION=8.28.0
+RUN curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz \
+    | tar -xz -C /usr/local/bin gitleaks
+
+# Trivy
+ARG TRIVY_VERSION=0.67.2
+RUN curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
+    | tar -xz -C /usr/local/bin trivy
+
+# Pre-download trivy DB for faster scans
+RUN trivy image --download-db-only
+
+# -----------------------------------------------------------------------------
+# Stage 3: CI Runtime
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim
+
+LABEL org.opencontainers.image.title="Rediver Agent CI"
+LABEL org.opencontainers.image.description="CI/CD optimized security scanning agent"
+
+# Install git (required for diff-based scanning)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ca-certificates \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy tools
+COPY --from=tools /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=tools /usr/local/bin/semgrep* /usr/local/bin/
+COPY --from=tools /usr/local/bin/gitleaks /usr/local/bin/
+COPY --from=tools /usr/local/bin/trivy /usr/local/bin/
+
+# Copy trivy cache (pre-downloaded DB)
+COPY --from=tools /root/.cache/trivy /root/.cache/trivy
+
+# Copy rediver-agent
+COPY --from=builder /build/rediver-agent /usr/local/bin/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Environment for CI
+ENV SEMGREP_SEND_METRICS=off
+ENV TRIVY_CACHE_DIR=/root/.cache/trivy
+ENV TRIVY_NO_PROGRESS=true
+ENV CI=true
+
+# Git safe directory (for mounted repos)
+RUN git config --global --add safe.directory '*'
+
+WORKDIR /github/workspace
+
+# Default: run with auto-ci detection
+ENTRYPOINT ["rediver-agent"]
+CMD ["-auto-ci", "-verbose"]
