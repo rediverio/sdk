@@ -27,12 +27,15 @@ ARG VERSION=dev
 # ENV
 ENV GO111MODULE=on
 
-# DEBUG: List all files to ensure COPY is working
+# DEBUG: List files
 RUN ls -la
 
-# Build directly (relies on go.work for local resolution)
-# Note: No explicit 'go mod download' needed for workspace mode usually, 
-# but if needed, go build handles it.
+# WORKAROUND: Force local resolution by removing go.work (if any) and using replace in go.mod
+# This ensures that 'github.com/rediverio/rediver-sdk' resolves to '.' inside the container
+RUN rm -f go.work go.work.sum && \
+    go mod edit -replace github.com/rediverio/rediver-sdk=./
+
+# Build
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
