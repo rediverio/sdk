@@ -24,10 +24,12 @@ ARG TARGETARCH=amd64
 ARG VERSION=dev
 
 # ENV
-ENV GO111MODULE=on
+# GO111MODULE=on is default, skipping
 
-# Build
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+# Build (with cache mounts for faster repeated builds)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
     -o /out/rediver-agent \
