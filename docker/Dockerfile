@@ -10,7 +10,10 @@ WORKDIR /src
 # Copy everything
 COPY . .
 
-# Build (Go will find local packages automatically)
+# Add replace directive to use local packages (avoids module path mismatch)
+RUN go mod edit -replace github.com/rediverio/rediver-sdk=./
+
+# Build
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
