@@ -23,8 +23,11 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
 
+# Private repo: skip module proxy and use local source
+ENV GOPRIVATE=github.com/rediverio/*
+
 # Download dependencies and build
-RUN go mod tidy && \
+RUN go mod edit -replace github.com/rediverio/rediver-sdk=./ && \
     go mod download && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
