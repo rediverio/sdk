@@ -6,6 +6,8 @@
 #   - rediverio/rediver-agent:slim       (minimal, no tools)
 #   - rediverio/rediver-agent:ci         (CI/CD optimized)
 #
+# All variants are built from a single Dockerfile using --target flag.
+#
 # Required secrets:
 #   - DOCKERHUB_USERNAME: Docker Hub username
 #   - DOCKERHUB_TOKEN: Docker Hub access token
@@ -120,6 +122,7 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
+          target: full
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           no-cache: true
@@ -175,7 +178,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile.slim
+          file: ./docker/Dockerfile
+          target: slim
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           no-cache: true
@@ -223,7 +227,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile.ci
+          file: ./docker/Dockerfile
+          target: ci
           platforms: linux/amd64
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           no-cache: true
