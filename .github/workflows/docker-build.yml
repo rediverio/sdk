@@ -118,23 +118,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: full
-          platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          no-cache: true
-          build-args: |
-            VERSION=${{ needs.prepare.outputs.version }}
+      - name: Build image
+        run: |
+          docker build \
+            --target full \
+            --build-arg VERSION=${{ needs.prepare.outputs.version }} \
+            -t ${{ env.IMAGE_NAME }}:full-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }} \
+            -f ./Dockerfile \
+            --no-cache \
+            .
+
+      - name: Push image and get digest
+        id: push
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:full-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE_NAME }}:full-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }} | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
       - name: Export digest
         run: |
           mkdir -p /tmp/digests/full
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.push.outputs.digest }}"
           touch "/tmp/digests/full/${digest#sha256:}"
 
       - name: Upload digest
@@ -177,23 +181,27 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: slim
-          platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          no-cache: true
-          build-args: |
-            VERSION=${{ needs.prepare.outputs.version }}
+      - name: Build image
+        run: |
+          docker build \
+            --target slim \
+            --build-arg VERSION=${{ needs.prepare.outputs.version }} \
+            -t ${{ env.IMAGE_NAME }}:slim-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }} \
+            -f ./Dockerfile \
+            --no-cache \
+            .
+
+      - name: Push image and get digest
+        id: push
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:slim-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE_NAME }}:slim-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }} | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
       - name: Export digest
         run: |
           mkdir -p /tmp/digests/slim
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.push.outputs.digest }}"
           touch "/tmp/digests/slim/${digest#sha256:}"
 
       - name: Upload digest
