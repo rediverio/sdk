@@ -1,104 +1,133 @@
+# syntax=docker/dockerfile:1.7
 # =============================================================================
-# Rediver Agent - Multi-Target Dockerfile
-# =============================================================================
-# This Dockerfile supports multiple build targets:
-#   - slim: Minimal distroless image (no tools, smallest size)
-#   - full: Complete image with all security tools
-#   - ci:   CI/CD optimized image with pre-downloaded databases
-#
-# Usage:
-#   docker build --target slim -t rediver-agent:slim -f docker/Dockerfile .
-#   docker build --target full -t rediver-agent:full -f docker/Dockerfile .
-#   docker build --target ci   -t rediver-agent:ci   -f docker/Dockerfile .
+# Rediver Agent - Multi-Target, Multi-Arch, Production-Ready Dockerfile
+# Targets:
+#   - slim: distroless static, smallest (no tools)
+#   - full: runtime with semgrep + gitleaks + trivy
+#   - ci:   full + pre-downloaded trivy DB (faster CI)
 # =============================================================================
 
-# =============================================================================
-# Stage 1: Build Go binary (Shared across all targets)
-# =============================================================================
-FROM golang:1.25-alpine AS builder
+# -----------------------------------------------------------------------------
+# Stage 1: Build Go binary (shared)
+# -----------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /src
 
+# Better build cache: copy module files first
+COPY go.mod go.sum ./
+
+# Go module download cache (BuildKit)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+# Copy the rest
 COPY . .
 
-# Add replace directive to use local packages (avoids module path mismatch)
-RUN go mod edit -replace github.com/rediverio/rediver-sdk=./
+# Optional local replace (only if you vendor the SDK inside repo)
+# Adjust LOCAL_SDK_PATH if needed (default: rediver-sdk folder at repo root)
+ARG LOCAL_SDK_PATH=rediver-sdk
+RUN if [ -d "./${LOCAL_SDK_PATH}" ]; then \
+    go mod edit -replace github.com/rediverio/rediver-sdk=./${LOCAL_SDK_PATH}; \
+    fi
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+
+# Build cache for Go compilation
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
-    -o /src/rediver-agent \
+    -o /out/rediver-agent \
     ./cmd/rediver-agent
 
-# =============================================================================
-# Stage 2: Install security tools (Shared for full & ci)
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Stage 2: Tools (shared for full & ci) - multi-arch aware
+# -----------------------------------------------------------------------------
 FROM python:3.12-slim AS tools
 
+ARG TARGETARCH
+ARG SEMGREP_VERSION=1.93.0
+ARG GITLEAKS_VERSION=8.28.0
+ARG TRIVY_VERSION=0.67.2
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl wget git ca-certificates \
+    curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir semgrep
+# Install semgrep once here, then reuse by copying to full/ci
+RUN pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}"
 
-ARG GITLEAKS_VERSION=8.28.0
-RUN curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz \
-    | tar -xz -C /usr/local/bin gitleaks
+# Download arch-correct binaries for gitleaks & trivy
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+    amd64) GITLEAKS_ARCH="x64";   TRIVY_ARCH="64bit" ;; \
+    arm64) GITLEAKS_ARCH="arm64"; TRIVY_ARCH="ARM64" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin gitleaks; \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin trivy; \
+    chmod +x /usr/local/bin/gitleaks /usr/local/bin/trivy
 
-ARG TRIVY_VERSION=0.67.2
-RUN curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz \
-    | tar -xz -C /usr/local/bin trivy
-
-# =============================================================================
-# Stage 3: Tools with pre-downloaded database (for CI target)
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Stage 3: Tools with pre-downloaded Trivy DB (for CI target)
+# -----------------------------------------------------------------------------
 FROM tools AS tools-with-db
 
-RUN trivy image --download-db-only
+ENV TRIVY_CACHE_DIR=/root/.cache/trivy
+RUN trivy image --download-db-only --no-progress
+# (tuỳ nhu cầu) nếu bạn scan Java, bật thêm:
+# RUN trivy image --download-java-db-only --no-progress
 
-# =============================================================================
-# Target: SLIM - Minimal distroless image (no tools)
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Target: SLIM (distroless, no tools)
+# -----------------------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot AS slim
 
 LABEL org.opencontainers.image.title="Rediver Agent Slim"
-LABEL org.opencontainers.image.description="Minimal security scanning agent"
+LABEL org.opencontainers.image.description="Minimal security scanning agent (distroless)"
 
-COPY --from=builder /src/rediver-agent /usr/local/bin/
+COPY --from=builder /out/rediver-agent /usr/local/bin/rediver-agent
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Cert bundle from builder (alpine). If you ever change builder base, re-check this path.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /scan
+ENTRYPOINT ["/usr/local/bin/rediver-agent"]
+CMD ["--help"]
 
-ENTRYPOINT ["rediver-agent"]
-CMD ["-help"]
-
-# =============================================================================
-# Target: FULL - Complete image with all security tools
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Target: FULL (all tools, non-root)
+# -----------------------------------------------------------------------------
 FROM python:3.12-slim AS full
 
 LABEL org.opencontainers.image.title="Rediver Agent"
-LABEL org.opencontainers.image.description="Security scanning agent with all tools"
+LABEL org.opencontainers.image.description="Security scanning agent with semgrep, gitleaks, trivy"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
 RUN groupadd -r rediver && useradd -r -g rediver -d /home/rediver -m rediver
 
-RUN pip install --no-cache-dir semgrep
-
+# Reuse semgrep + python packages from tools stage (no reinstall)
+COPY --from=tools /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=tools /usr/local/bin/semgrep* /usr/local/bin/
 COPY --from=tools /usr/local/bin/gitleaks /usr/local/bin/
 COPY --from=tools /usr/local/bin/trivy /usr/local/bin/
-COPY --from=builder /src/rediver-agent /usr/local/bin/
+
+COPY --from=builder /out/rediver-agent /usr/local/bin/rediver-agent
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
-RUN mkdir -p /scan /config /cache && chown -R rediver:rediver /scan /config /cache
+RUN mkdir -p /scan /config /cache \
+    && chown -R rediver:rediver /scan /config /cache
 
 ENV HOME=/home/rediver
 ENV TRIVY_CACHE_DIR=/cache/trivy
@@ -106,37 +135,38 @@ ENV TRIVY_CACHE_DIR=/cache/trivy
 USER rediver
 WORKDIR /scan
 
-ENTRYPOINT ["rediver-agent"]
-CMD ["-help"]
+ENTRYPOINT ["/usr/local/bin/rediver-agent"]
+CMD ["--help"]
 
-# =============================================================================
-# Target: CI - CI/CD optimized image with pre-downloaded databases
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Target: CI (full + trivy DB preloaded + CI-friendly defaults)
+# -----------------------------------------------------------------------------
 FROM python:3.12-slim AS ci
 
 LABEL org.opencontainers.image.title="Rediver Agent CI"
-LABEL org.opencontainers.image.description="CI/CD optimized security scanning agent"
+LABEL org.opencontainers.image.description="CI-optimized security scanning agent (preloaded Trivy DB)"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from tools stage
+# Copy semgrep + tools + trivy DB cache
 COPY --from=tools-with-db /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=tools-with-db /usr/local/bin/semgrep* /usr/local/bin/
 COPY --from=tools-with-db /usr/local/bin/gitleaks /usr/local/bin/
 COPY --from=tools-with-db /usr/local/bin/trivy /usr/local/bin/
 COPY --from=tools-with-db /root/.cache/trivy /root/.cache/trivy
-COPY --from=builder /src/rediver-agent /usr/local/bin/
+
+COPY --from=builder /out/rediver-agent /usr/local/bin/rediver-agent
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 ENV TRIVY_CACHE_DIR=/root/.cache/trivy
 ENV TRIVY_NO_PROGRESS=true
 ENV CI=true
 
+# Avoid "dubious ownership" in GitHub Actions workspace
 RUN git config --global --add safe.directory '*'
 
 WORKDIR /github/workspace
-
-ENTRYPOINT ["rediver-agent"]
+ENTRYPOINT ["/usr/local/bin/rediver-agent"]
 CMD ["-auto-ci", "-verbose"]
