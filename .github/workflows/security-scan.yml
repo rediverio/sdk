@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0  # Full history for diff-based scanning
 
       - name: Run Rediver Agent
-        uses: docker://ghcr.io/rediverio/rediver-agent:ci
+        uses: docker://rediverio/rediver-agent:ci
         with:
           args: >-
             -tools semgrep,gitleaks,trivy
@@ -79,7 +79,7 @@ jobs:
           docker build -t rediver-agent:scan -f docker/Dockerfile .
 
       - name: Scan container image
-        uses: docker://ghcr.io/rediverio/rediver-agent:ci
+        uses: docker://rediverio/rediver-agent:ci
         with:
           args: >-
             -tool trivy-image
