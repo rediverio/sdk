@@ -19,9 +19,6 @@ WORKDIR /src
 # Copy all source code
 COPY . .
 
-# This IS the rediver-sdk repo, so replace module path with current directory
-RUN go mod edit -replace github.com/rediverio/rediver-sdk=./
-
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
