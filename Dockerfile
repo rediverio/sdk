@@ -24,9 +24,19 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG VERSION=dev
 
-# Build directly (go build will handle downloads and workspace resolution)
+# ENV to force direct connection
+ENV GOPRIVATE=*
+ENV GO111MODULE=on
+
+# DEBUG: List all files to ensure COPY is working correctly
+RUN ls -R /src
+
+# Download dependencies via vendor to isolate build
+RUN go mod vendor
+
+# Build using vendor directory
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath \
+    go build -mod=vendor -trimpath \
     -ldflags="-w -s -X main.appVersion=${VERSION}" \
     -o /out/rediver-agent \
     ./cmd/rediver-agent
