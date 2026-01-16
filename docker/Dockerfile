@@ -23,22 +23,22 @@ RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /build
 
-# Copy all source code first (including go.mod, go.sum, and pkg/)
-# This ensures local packages are available before go mod operations
+# Copy all source code (ensures local packages are available)
 COPY . .
 
-# Download dependencies (skip if already vendored)
-# Using -x for verbose output to debug issues
-RUN go mod download -x 2>&1 || true
+# Set GOPRIVATE to skip proxy verification for this module
+# This is needed because the module may not exist on the public proxy yet
+ENV GOPRIVATE=github.com/rediverio/*
 
-# Verify module is correctly set up
-RUN go list -m && go list ./...
+# Download external dependencies only (not our own packages)
+RUN go mod download
 
 # Build with optimizations
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X main.appVersion=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
+    -ldflags="-w -s -X main.appVersion=${VERSION}" \
     -o /build/rediver-agent \
     ./cmd/rediver-agent
 
