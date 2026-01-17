@@ -1,4 +1,4 @@
-# Rediver Agent Configuration Example
+# Agent Configuration Example
 # See agent.yaml.template for full options
 
 agent:
@@ -7,10 +7,10 @@ agent:
   command_poll_interval: 30s
   heartbeat_interval: 1m
 
-rediver:
-  base_url: ${REDIVER_API_URL}
-  api_key: ${REDIVER_API_KEY}
-  worker_id: ${REDIVER_WORKER_ID}
+server:
+  base_url: ${API_URL}
+  api_key: ${API_KEY}
+  worker_id: ${WORKER_ID}
 
 scanners:
   - name: semgrep
