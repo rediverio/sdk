@@ -1,41 +1,32 @@
 package core
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"strings"
+
+	"github.com/rediverio/rediver-sdk/pkg/shared/fingerprint"
+	"github.com/rediverio/rediver-sdk/pkg/shared/severity"
 )
 
 // =============================================================================
-// Fingerprint Generation
+// Fingerprint Generation (delegates to shared package)
 // =============================================================================
 
 // GenerateSastFingerprint creates a fingerprint for SAST/Secret findings.
-// Format: sha256(file:ruleID:startLine)
+// Deprecated: Use fingerprint.GenerateSAST from pkg/shared/fingerprint instead.
 func GenerateSastFingerprint(file, ruleID string, startLine int) string {
-	raw := fmt.Sprintf("%s:%s:%d", file, ruleID, startLine)
-	return hashString(raw)
+	return fingerprint.GenerateSAST(file, ruleID, startLine, 0)
 }
 
 // GenerateScaFingerprint creates a fingerprint for SCA vulnerabilities.
-// Format: sha256(pkgName:pkgVersion:vulnID)
+// Deprecated: Use fingerprint.GenerateSCA from pkg/shared/fingerprint instead.
 func GenerateScaFingerprint(pkgName, pkgVersion, vulnID string) string {
-	raw := fmt.Sprintf("%s:%s:%s", pkgName, pkgVersion, vulnID)
-	return hashString(raw)
+	return fingerprint.GenerateSCA(pkgName, pkgVersion, vulnID)
 }
 
 // GenerateSecretFingerprint creates a fingerprint for secret findings.
-// Format: sha256(file:ruleID:startLine:secretHash)
+// Deprecated: Use fingerprint.GenerateSecret from pkg/shared/fingerprint instead.
 func GenerateSecretFingerprint(file, ruleID string, startLine int, secretValue string) string {
-	secretHash := hashString(secretValue)[:8] // First 8 chars of secret hash
-	raw := fmt.Sprintf("%s:%s:%d:%s", file, ruleID, startLine, secretHash)
-	return hashString(raw)
-}
-
-func hashString(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
+	return fingerprint.GenerateSecret(file, ruleID, startLine, secretValue)
 }
 
 // =============================================================================
@@ -80,41 +71,19 @@ func SelectBestCVSS(cvssMap map[CVSSSource]CVSSData) *CVSSData {
 }
 
 // =============================================================================
-// Severity Mapping
+// Severity Mapping (delegates to shared package)
 // =============================================================================
 
 // SeverityFromCVSS converts a CVSS score to severity level.
+// Deprecated: Use severity.FromCVSS from pkg/shared/severity instead.
 func SeverityFromCVSS(score float64) string {
-	switch {
-	case score >= 9.0:
-		return "critical"
-	case score >= 7.0:
-		return "high"
-	case score >= 4.0:
-		return "medium"
-	case score > 0:
-		return "low"
-	default:
-		return "info"
-	}
+	return severity.FromCVSS(score).String()
 }
 
 // NormalizeSeverity normalizes severity strings from different scanners.
-func NormalizeSeverity(severity string) string {
-	switch strings.ToUpper(strings.TrimSpace(severity)) {
-	case "CRITICAL":
-		return "critical"
-	case "HIGH", "ERROR":
-		return "high"
-	case "MEDIUM", "MODERATE", "WARNING":
-		return "medium"
-	case "LOW":
-		return "low"
-	case "INFO", "INFORMATIONAL", "NOTE":
-		return "info"
-	default:
-		return "info"
-	}
+// Deprecated: Use severity.FromString from pkg/shared/severity instead.
+func NormalizeSeverity(sev string) string {
+	return severity.FromString(sev).String()
 }
 
 // =============================================================================

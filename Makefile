@@ -55,20 +55,39 @@ test-coverage: ## Run tests with coverage
 # =============================================================================
 
 lint: ## Run linters
-	@echo "Running go vet..."
-	go vet ./...
-	@if command -v staticcheck >/dev/null 2>&1; then \
-		echo "Running staticcheck..."; \
-		staticcheck ./...; \
-	fi
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		echo "Running golangci-lint..."; \
-		golangci-lint run ./...; \
-	fi
+	@echo "Running golangci-lint..."
+	@golangci-lint run --config .golangci.yml ./...
 
 fmt: ## Format code
 	go fmt ./...
 	gofmt -s -w $(GO_FILES)
+
+# =============================================================================
+# Security & Pre-commit
+# =============================================================================
+
+pre-commit-install: ## Install pre-commit hooks
+	@echo "Installing pre-commit hooks..."
+	@pip install pre-commit --quiet || pip3 install pre-commit --quiet
+	@pre-commit install
+	@echo "Pre-commit hooks installed!"
+
+pre-commit-run: ## Run all pre-commit hooks
+	@pre-commit run --all-files
+
+security-scan: ## Run full security scan
+	@echo "Running full security scan..."
+	@echo ""
+	@echo "=== Gitleaks (Secret Detection) ==="
+	@gitleaks detect --config .gitleaks.toml --source . --verbose || true
+	@echo ""
+	@echo "=== Golangci-lint with Gosec (Code Security) ==="
+	@golangci-lint run --config .golangci.yml ./... || true
+	@echo ""
+	@echo "=== Trivy (Vulnerability Scan) ==="
+	@trivy fs --severity HIGH,CRITICAL --scanners vuln,secret,misconfig . || true
+	@echo ""
+	@echo "Security scan complete!"
 
 # =============================================================================
 # Docker

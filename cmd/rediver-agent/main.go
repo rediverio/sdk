@@ -35,6 +35,7 @@ import (
 	"github.com/rediverio/rediver-sdk/pkg/core"
 	"github.com/rediverio/rediver-sdk/pkg/gitenv"
 	"github.com/rediverio/rediver-sdk/pkg/handler"
+	"github.com/rediverio/rediver-sdk/pkg/retry"
 	"github.com/rediverio/rediver-sdk/pkg/ris"
 	"github.com/rediverio/rediver-sdk/pkg/scanners"
 	"github.com/rediverio/rediver-sdk/pkg/strategy"
@@ -67,6 +68,15 @@ type Config struct {
 		WorkerID string        `yaml:"worker_id"` // For tenant tracking
 		Timeout  time.Duration `yaml:"timeout"`
 	} `yaml:"rediver"`
+
+	// Retry Queue (for network resilience)
+	RetryQueue struct {
+		Enabled     bool          `yaml:"enabled"`
+		Dir         string        `yaml:"dir"`          // Queue directory (default: ~/.rediver/retry-queue)
+		Interval    time.Duration `yaml:"interval"`     // Retry check interval (default: 5m)
+		MaxAttempts int           `yaml:"max_attempts"` // Max retry attempts (default: 10)
+		TTL         time.Duration `yaml:"ttl"`          // Item TTL (default: 7d)
+	} `yaml:"retry_queue"`
 
 	// Scanners to run
 	Scanners []ScannerConfig `yaml:"scanners"`
@@ -118,6 +128,10 @@ func main() {
 	autoDetectCI := flag.Bool("auto-ci", true, "Auto-detect CI environment (GitHub Actions, GitLab CI)")
 	checkTools := flag.Bool("check-tools", false, "Check if required tools are installed and show installation instructions")
 	installTools := flag.Bool("install-tools", false, "Interactively install missing tools (requires sudo for some tools)")
+
+	// Retry queue flags
+	enableRetryQueue := flag.Bool("retry-queue", false, "Enable persistent retry queue for network resilience (or REDIVER_RETRY_QUEUE env)")
+	retryQueueDir := flag.String("retry-dir", "", "Retry queue directory (default: ~/.rediver/retry-queue, or REDIVER_RETRY_DIR env)")
 
 	flag.Parse()
 
@@ -203,6 +217,13 @@ func main() {
 				}
 			}
 		}
+
+		// Retry queue config from flags or env
+		cfg.RetryQueue.Enabled = *enableRetryQueue || getEnvOrFlag("", "REDIVER_RETRY_QUEUE") == "true"
+		cfg.RetryQueue.Dir = getEnvOrFlag(*retryQueueDir, "REDIVER_RETRY_DIR")
+		cfg.RetryQueue.Interval = retry.DefaultRetryInterval
+		cfg.RetryQueue.MaxAttempts = retry.DefaultMaxAttempts
+		cfg.RetryQueue.TTL = retry.DefaultTTL
 	}
 
 	// Validate required fields
@@ -217,13 +238,21 @@ func main() {
 	var apiClient *client.Client
 	var pusher core.Pusher
 	if !*standalone && cfg.Rediver.BaseURL != "" && cfg.Rediver.APIKey != "" {
-		apiClient = client.New(&client.Config{
+		clientCfg := &client.Config{
 			BaseURL:  cfg.Rediver.BaseURL,
 			APIKey:   cfg.Rediver.APIKey,
 			WorkerID: cfg.Rediver.WorkerID,
 			Timeout:  cfg.Rediver.Timeout,
 			Verbose:  cfg.Agent.Verbose,
-		})
+
+			// Retry queue configuration
+			EnableRetryQueue: cfg.RetryQueue.Enabled,
+			RetryQueueDir:    cfg.RetryQueue.Dir,
+			RetryInterval:    cfg.RetryQueue.Interval,
+			RetryMaxAttempts: cfg.RetryQueue.MaxAttempts,
+			RetryTTL:         cfg.RetryQueue.TTL,
+		}
+		apiClient = client.New(clientCfg)
 		pusher = apiClient
 
 		// Test connection
@@ -233,6 +262,16 @@ func main() {
 			fmt.Println("Connected to Rediver API")
 			if cfg.Rediver.WorkerID != "" {
 				fmt.Printf("Worker ID: %s\n", cfg.Rediver.WorkerID)
+			}
+		}
+
+		// Show retry queue status
+		if cfg.RetryQueue.Enabled && cfg.Agent.Verbose {
+			fmt.Println("Retry queue: enabled")
+			if cfg.RetryQueue.Dir != "" {
+				fmt.Printf("  Directory: %s\n", cfg.RetryQueue.Dir)
+			} else {
+				fmt.Println("  Directory: ~/.rediver/retry-queue (default)")
 			}
 		}
 	} else if *push && !*standalone {
@@ -537,6 +576,15 @@ func runDaemon(ctx context.Context, cfg *Config, apiClient *client.Client, pushe
 		fmt.Printf("  Added collector: %s\n", collector.Name())
 	}
 
+	// Start retry worker if enabled
+	if cfg.RetryQueue.Enabled && apiClient != nil {
+		if err := apiClient.StartRetryWorker(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Could not start retry worker: %v\n", err)
+		} else if cfg.Agent.Verbose {
+			fmt.Println("  Retry worker: started")
+		}
+	}
+
 	// Start command poller if enabled
 	var poller *core.CommandPoller
 	if cfg.Agent.EnableCommands && apiClient != nil {
@@ -614,11 +662,49 @@ func runDaemon(ctx context.Context, cfg *Config, apiClient *client.Client, pushe
 		poller.Stop()
 	}
 
+	// Stop retry worker and show final stats
+	if cfg.RetryQueue.Enabled && apiClient != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		// Show retry queue stats before shutdown
+		if stats, err := apiClient.GetRetryQueueStats(shutdownCtx); err == nil && stats != nil {
+			if stats.TotalItems > 0 {
+				fmt.Printf("\nRetry queue stats:\n")
+				fmt.Printf("  Total items: %d\n", stats.TotalItems)
+				fmt.Printf("  Pending: %d\n", stats.PendingItems)
+				fmt.Printf("  Processing: %d\n", stats.ProcessingItems)
+				fmt.Printf("  Failed: %d\n", stats.FailedItems)
+			}
+		}
+
+		// Process any remaining items before shutdown
+		if cfg.Agent.Verbose {
+			fmt.Println("Processing remaining retry queue items...")
+		}
+		if err := apiClient.ProcessRetryQueueNow(shutdownCtx); err != nil && cfg.Agent.Verbose {
+			fmt.Printf("Warning: Error processing retry queue: %v\n", err)
+		}
+
+		// Stop the worker
+		if err := apiClient.StopRetryWorker(shutdownCtx); err != nil && cfg.Agent.Verbose {
+			fmt.Printf("Warning: Error stopping retry worker: %v\n", err)
+		}
+
+		shutdownCancel()
+	}
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := agent.Stop(shutdownCtx); err != nil {
 		fmt.Fprintf(os.Stderr, "Shutdown error: %v\n", err)
+	}
+
+	// Close the API client (flushes any remaining data)
+	if apiClient != nil {
+		if err := apiClient.Close(); err != nil && cfg.Agent.Verbose {
+			fmt.Printf("Warning: Error closing client: %v\n", err)
+		}
 	}
 
 	fmt.Println("Agent stopped.")

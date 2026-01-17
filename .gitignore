@@ -235,3 +235,4 @@ trace.out
 # Downloaded dependencies for scanners
 .cache/
 .trivy-cache/
+rediver-agent

@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/rediverio/rediver-sdk/pkg/core"
+	"github.com/rediverio/rediver-sdk/pkg/retry"
 	"github.com/rediverio/rediver-sdk/pkg/ris"
 )
 
@@ -27,6 +29,11 @@ type Client struct {
 	maxRetries int
 	retryDelay time.Duration
 	verbose    bool
+
+	// Retry queue (optional)
+	retryQueue  retry.RetryQueue
+	retryWorker *retry.RetryWorker
+	retryMu     sync.RWMutex
 }
 
 // Ensure Client implements core.Pusher
@@ -41,6 +48,13 @@ type Config struct {
 	MaxRetries int           `yaml:"max_retries" json:"max_retries"`
 	RetryDelay time.Duration `yaml:"retry_delay" json:"retry_delay"`
 	Verbose    bool          `yaml:"verbose" json:"verbose"`
+
+	// Retry queue configuration (optional)
+	EnableRetryQueue bool          `yaml:"enable_retry_queue" json:"enable_retry_queue"`
+	RetryQueueDir    string        `yaml:"retry_queue_dir" json:"retry_queue_dir"`       // Default: ~/.rediver/retry-queue
+	RetryInterval    time.Duration `yaml:"retry_interval" json:"retry_interval"`         // Default: 5m
+	RetryMaxAttempts int           `yaml:"retry_max_attempts" json:"retry_max_attempts"` // Default: 10
+	RetryTTL         time.Duration `yaml:"retry_ttl" json:"retry_ttl"`                   // Default: 7d (168h)
 }
 
 // DefaultConfig returns default client config.
@@ -155,7 +169,26 @@ type HeartbeatRequest struct {
 }
 
 // PushFindings sends findings to Rediver.
+// If the push fails and a retry queue is configured, the report is queued for later retry.
 func (c *Client) PushFindings(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+	result, err := c.pushFindingsInternal(ctx, report)
+
+	// If push failed and retry queue is enabled, queue for retry
+	if err != nil && c.hasRetryQueue() {
+		if queueErr := c.queueForRetry(ctx, report, retry.ItemTypeFindings, err); queueErr != nil {
+			if c.verbose {
+				fmt.Printf("[rediver] Failed to queue for retry: %v\n", queueErr)
+			}
+		} else if c.verbose {
+			fmt.Printf("[rediver] Queued for retry due to: %v\n", err)
+		}
+	}
+
+	return result, err
+}
+
+// pushFindingsInternal performs the actual push without retry queue logic.
+func (c *Client) pushFindingsInternal(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
 	url := fmt.Sprintf("%s/api/v1/agent/ingest", c.baseURL)
 
 	if c.verbose {
@@ -202,7 +235,26 @@ func (c *Client) PushFindings(ctx context.Context, report *ris.Report) (*core.Pu
 }
 
 // PushAssets sends assets to Rediver.
+// If the push fails and a retry queue is configured, the report is queued for later retry.
 func (c *Client) PushAssets(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+	result, err := c.pushAssetsInternal(ctx, report)
+
+	// If push failed and retry queue is enabled, queue for retry
+	if err != nil && c.hasRetryQueue() {
+		if queueErr := c.queueForRetry(ctx, report, retry.ItemTypeAssets, err); queueErr != nil {
+			if c.verbose {
+				fmt.Printf("[rediver] Failed to queue assets for retry: %v\n", queueErr)
+			}
+		} else if c.verbose {
+			fmt.Printf("[rediver] Queued assets for retry due to: %v\n", err)
+		}
+	}
+
+	return result, err
+}
+
+// pushAssetsInternal performs the actual push without retry queue logic.
+func (c *Client) pushAssetsInternal(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
 	url := fmt.Sprintf("%s/api/v1/agent/ingest", c.baseURL)
 
 	if c.verbose {
@@ -276,6 +328,60 @@ func (c *Client) TestConnection(ctx context.Context) error {
 		Message: "connection test",
 	}
 	return c.SendHeartbeat(ctx, status)
+}
+
+// checkFingerprintsRequest is the internal request for checking fingerprint existence.
+type checkFingerprintsRequest struct {
+	Fingerprints []string `json:"fingerprints"`
+}
+
+// checkFingerprintsResponse is the internal response for fingerprint check.
+type checkFingerprintsResponse struct {
+	Existing []string `json:"existing"` // Fingerprints that already exist
+	Missing  []string `json:"missing"`  // Fingerprints that don't exist
+}
+
+// CheckFingerprints checks which fingerprints already exist on the server.
+// This is used by the retry mechanism to avoid re-uploading data that already exists.
+// It also serves as a connectivity check before processing the retry queue.
+// This method implements retry.FingerprintChecker interface.
+func (c *Client) CheckFingerprints(ctx context.Context, fingerprints []string) (*retry.FingerprintCheckResult, error) {
+	if len(fingerprints) == 0 {
+		return &retry.FingerprintCheckResult{
+			Existing: []string{},
+			Missing:  []string{},
+		}, nil
+	}
+
+	req := checkFingerprintsRequest{
+		Fingerprints: fingerprints,
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	url := c.baseURL + "/api/v1/agent/ingest/check"
+	respBody, err := c.doRequest(ctx, "POST", url, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("check fingerprints: %w", err)
+	}
+
+	var resp checkFingerprintsResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[rediver] Fingerprint check: %d existing, %d missing\n",
+			len(resp.Existing), len(resp.Missing))
+	}
+
+	return &retry.FingerprintCheckResult{
+		Existing: resp.Existing,
+		Missing:  resp.Missing,
+	}, nil
 }
 
 // doRequest performs an HTTP request with retry logic.
@@ -502,4 +608,283 @@ func generateID() string {
 		panic(fmt.Sprintf("failed to generate ID: %v", err))
 	}
 	return hex.EncodeToString(b)
+}
+
+// ============================================================================
+// Retry Queue Methods
+// ============================================================================
+
+// hasRetryQueue returns true if a retry queue is configured.
+func (c *Client) hasRetryQueue() bool {
+	c.retryMu.RLock()
+	defer c.retryMu.RUnlock()
+	return c.retryQueue != nil
+}
+
+// queueForRetry adds a report to the retry queue for later retry.
+func (c *Client) queueForRetry(ctx context.Context, report *ris.Report, itemType retry.ItemType, originalErr error) error {
+	c.retryMu.RLock()
+	queue := c.retryQueue
+	c.retryMu.RUnlock()
+
+	if queue == nil {
+		return errors.New("retry queue not configured")
+	}
+
+	item := &retry.QueueItem{
+		Type:        itemType,
+		Report:      report,
+		LastError:   originalErr.Error(),
+		WorkerID:    c.workerID,
+		ScannerName: "",
+	}
+
+	// Set scanner name from tool info if available
+	if report.Tool != nil {
+		item.ScannerName = report.Tool.Name
+	}
+
+	// Set target path from first asset if available
+	if len(report.Assets) > 0 {
+		item.TargetPath = report.Assets[0].Value
+	}
+
+	_, err := queue.Enqueue(ctx, item)
+	return err
+}
+
+// EnableRetryQueue enables the retry queue with the given configuration.
+// This creates a file-based retry queue and optionally starts the background worker.
+func (c *Client) EnableRetryQueue(ctx context.Context, cfg *RetryQueueConfig) error {
+	c.retryMu.Lock()
+	defer c.retryMu.Unlock()
+
+	if cfg == nil {
+		cfg = DefaultRetryQueueConfig()
+	}
+
+	// Create file-based queue
+	queue, err := retry.NewFileRetryQueue(&retry.FileQueueConfig{
+		Dir:           cfg.Dir,
+		MaxSize:       cfg.MaxSize,
+		Deduplication: true,
+		Verbose:       c.verbose,
+		Backoff:       cfg.Backoff,
+	})
+	if err != nil {
+		return fmt.Errorf("create retry queue: %w", err)
+	}
+
+	c.retryQueue = queue
+
+	// Create worker if auto-start is enabled
+	if cfg.AutoStart {
+		worker := retry.NewRetryWorker(&retry.RetryWorkerConfig{
+			Interval:    cfg.Interval,
+			BatchSize:   cfg.BatchSize,
+			MaxAttempts: cfg.MaxAttempts,
+			TTL:         cfg.TTL,
+			Backoff:     cfg.Backoff,
+			Verbose:     c.verbose,
+		}, queue, c)
+
+		c.retryWorker = worker
+
+		// Start the worker
+		if err := worker.Start(ctx); err != nil {
+			return fmt.Errorf("start retry worker: %w", err)
+		}
+	}
+
+	if c.verbose {
+		fmt.Printf("[rediver] Retry queue enabled (dir: %s)\n", cfg.Dir)
+	}
+
+	return nil
+}
+
+// StartRetryWorker starts the background retry worker.
+// EnableRetryQueue must be called first.
+func (c *Client) StartRetryWorker(ctx context.Context) error {
+	c.retryMu.Lock()
+	defer c.retryMu.Unlock()
+
+	if c.retryQueue == nil {
+		return errors.New("retry queue not enabled")
+	}
+
+	if c.retryWorker != nil && c.retryWorker.IsRunning() {
+		return nil // Already running
+	}
+
+	if c.retryWorker == nil {
+		c.retryWorker = retry.NewRetryWorker(nil, c.retryQueue, c)
+	}
+
+	return c.retryWorker.Start(ctx)
+}
+
+// StopRetryWorker stops the background retry worker gracefully.
+func (c *Client) StopRetryWorker(ctx context.Context) error {
+	c.retryMu.Lock()
+	worker := c.retryWorker
+	c.retryMu.Unlock()
+
+	if worker == nil {
+		return nil
+	}
+
+	return worker.Stop(ctx)
+}
+
+// DisableRetryQueue stops the worker and closes the retry queue.
+func (c *Client) DisableRetryQueue(ctx context.Context) error {
+	c.retryMu.Lock()
+	defer c.retryMu.Unlock()
+
+	// Stop worker if running
+	if c.retryWorker != nil {
+		if err := c.retryWorker.Stop(ctx); err != nil {
+			return fmt.Errorf("stop retry worker: %w", err)
+		}
+		c.retryWorker = nil
+	}
+
+	// Close queue
+	if c.retryQueue != nil {
+		if err := c.retryQueue.Close(); err != nil {
+			return fmt.Errorf("close retry queue: %w", err)
+		}
+		c.retryQueue = nil
+	}
+
+	return nil
+}
+
+// GetRetryQueueStats returns statistics about the retry queue.
+func (c *Client) GetRetryQueueStats(ctx context.Context) (*retry.QueueStats, error) {
+	c.retryMu.RLock()
+	queue := c.retryQueue
+	c.retryMu.RUnlock()
+
+	if queue == nil {
+		return nil, errors.New("retry queue not enabled")
+	}
+
+	return queue.Stats(ctx)
+}
+
+// GetRetryWorkerStats returns statistics about the retry worker.
+func (c *Client) GetRetryWorkerStats() (*retry.WorkerStats, error) {
+	c.retryMu.RLock()
+	worker := c.retryWorker
+	c.retryMu.RUnlock()
+
+	if worker == nil {
+		return nil, errors.New("retry worker not running")
+	}
+
+	stats := worker.Stats()
+	return &stats, nil
+}
+
+// ProcessRetryQueueNow immediately processes pending items in the retry queue.
+// This is useful for testing or manual intervention.
+func (c *Client) ProcessRetryQueueNow(ctx context.Context) error {
+	c.retryMu.RLock()
+	worker := c.retryWorker
+	c.retryMu.RUnlock()
+
+	if worker == nil {
+		return errors.New("retry worker not configured")
+	}
+
+	return worker.ProcessNow(ctx)
+}
+
+// PushReport implements retry.ReportPusher interface.
+// This is used by the retry worker to push items from the queue.
+func (c *Client) PushReport(ctx context.Context, report *ris.Report) error {
+	// Use internal methods to avoid re-queueing on failure
+	if len(report.Findings) > 0 {
+		_, err := c.pushFindingsInternal(ctx, report)
+		return err
+	}
+	if len(report.Assets) > 0 {
+		_, err := c.pushAssetsInternal(ctx, report)
+		return err
+	}
+	return nil
+}
+
+// RetryQueueConfig configures the retry queue.
+type RetryQueueConfig struct {
+	// Dir is the directory to store queue files.
+	// Default: ~/.rediver/retry-queue
+	Dir string
+
+	// MaxSize is the maximum number of items in the queue.
+	// Default: 1000
+	MaxSize int
+
+	// Interval is how often to check the queue for items to retry.
+	// Default: 5 minutes
+	Interval time.Duration
+
+	// BatchSize is the maximum number of items to process per check.
+	// Default: 10
+	BatchSize int
+
+	// MaxAttempts is the maximum number of retry attempts per item.
+	// Default: 10
+	MaxAttempts int
+
+	// TTL is how long to keep items in the queue before expiring.
+	// Default: 7 days
+	TTL time.Duration
+
+	// Backoff configures the retry backoff behavior.
+	Backoff *retry.BackoffConfig
+
+	// AutoStart starts the retry worker automatically.
+	// Default: true
+	AutoStart bool
+}
+
+// DefaultRetryQueueConfig returns a configuration with default values.
+func DefaultRetryQueueConfig() *RetryQueueConfig {
+	return &RetryQueueConfig{
+		MaxSize:     retry.DefaultMaxQueueSize,
+		Interval:    retry.DefaultRetryInterval,
+		BatchSize:   retry.DefaultBatchSize,
+		MaxAttempts: retry.DefaultMaxAttempts,
+		TTL:         retry.DefaultTTL,
+		Backoff:     retry.DefaultBackoffConfig(),
+		AutoStart:   true,
+	}
+}
+
+// Close gracefully shuts down the client and releases resources.
+// This stops the retry worker and closes the retry queue if enabled.
+func (c *Client) Close() error {
+	c.retryMu.Lock()
+	defer c.retryMu.Unlock()
+
+	// Stop the retry worker if running
+	if c.retryWorker != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = c.retryWorker.Stop(ctx)
+		c.retryWorker = nil
+	}
+
+	// Close the retry queue
+	if c.retryQueue != nil {
+		if err := c.retryQueue.Close(); err != nil {
+			return fmt.Errorf("close retry queue: %w", err)
+		}
+		c.retryQueue = nil
+	}
+
+	return nil
 }

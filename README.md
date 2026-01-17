@@ -210,6 +210,87 @@ func main() {
 }
 ```
 
+### 7. Persistent Retry Queue (Network Resilience)
+
+The SDK includes a persistent retry queue that ensures scan results are never lost due to temporary network failures. Failed uploads are automatically queued to disk and retried with exponential backoff.
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+    "github.com/rediverio/rediver-sdk/pkg/client"
+    "github.com/rediverio/rediver-sdk/pkg/ris"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create API client with retry queue enabled
+    apiClient := client.New(&client.Config{
+        BaseURL:  "https://api.rediver.io",
+        APIKey:   "your-api-key",
+        WorkerID: "worker-123",
+
+        // Enable persistent retry queue
+        EnableRetryQueue: true,
+        RetryQueueDir:    "~/.rediver/retry-queue", // Default location
+        RetryInterval:    5 * time.Minute,          // Check queue every 5 mins
+        RetryMaxAttempts: 10,                       // Max 10 retry attempts
+        RetryTTL:         7 * 24 * time.Hour,       // Keep items for 7 days
+    })
+    defer apiClient.Close()
+
+    // Start background retry worker (for daemon mode)
+    if err := apiClient.StartRetryWorker(ctx); err != nil {
+        log.Printf("Warning: Could not start retry worker: %v", err)
+    }
+    defer apiClient.StopRetryWorker(ctx)
+
+    // Push findings - automatically queued on failure
+    report := &ris.Report{...}
+    result, err := apiClient.PushFindings(ctx, report)
+    if err != nil {
+        // Error occurred, but data is safely queued for retry
+        log.Printf("Push failed (queued for retry): %v", err)
+    }
+
+    // Check retry queue stats
+    stats, _ := apiClient.GetRetryQueueStats(ctx)
+    if stats != nil && stats.TotalItems > 0 {
+        log.Printf("Retry queue: %d pending items", stats.PendingItems)
+    }
+}
+```
+
+**Retry Queue Features:**
+
+| Feature | Description |
+|---------|-------------|
+| File-based persistence | Items stored as JSON files in `~/.rediver/retry-queue` |
+| Exponential backoff | 5min → 10min → 20min → ... → max 48h |
+| Fingerprint deduplication | Prevents duplicate entries using SHA256 hash |
+| Configurable TTL | Items automatically expire after configured time |
+| Background worker | Periodically processes queue without blocking scans |
+| Graceful shutdown | Queue state preserved across restarts |
+
+**Backoff Schedule (default):**
+
+| Attempt | Wait Time |
+|---------|-----------|
+| 1 | 5 minutes |
+| 2 | 10 minutes |
+| 3 | 20 minutes |
+| 4 | 40 minutes |
+| 5 | ~1.3 hours |
+| 6 | ~2.6 hours |
+| 7 | ~5.3 hours |
+| 8 | ~10.6 hours |
+| 9 | ~21 hours |
+| 10 | 48 hours (max) |
+```
+
 ## Package Structure
 
 ```
@@ -224,6 +305,7 @@ rediver-sdk/
 │   │   ├── gitleaks/   # Gitleaks secret scanner
 │   │   └── trivy/      # Trivy SCA scanner
 │   ├── client/         # Rediver API client
+│   ├── retry/          # Persistent retry queue for network resilience
 │   ├── gitenv/         # CI environment detection
 │   ├── strategy/       # Scan strategy determination
 │   └── handler/        # Scan lifecycle handlers
@@ -244,6 +326,7 @@ rediver-sdk/
 | `Collector` | External data fetch | `Collect()`, `TestConnection()` |
 | `Agent` | Daemon management | `Start()`, `Stop()`, `Status()` |
 | `Pusher` | API communication | `PushFindings()`, `SendHeartbeat()` |
+| `RetryQueue` | Persistent queue | `Enqueue()`, `Dequeue()`, `Stats()` |
 
 ## RIS Schema
 
@@ -471,6 +554,8 @@ security-scan:
 | `REDIVER_API_URL` | Yes* | Rediver platform API URL |
 | `REDIVER_API_KEY` | Yes* | API key for authentication |
 | `REDIVER_WORKER_ID` | No | Worker identifier for tracking |
+| `REDIVER_RETRY_QUEUE` | No | Enable retry queue (`true`/`false`) |
+| `REDIVER_RETRY_DIR` | No | Custom retry queue directory |
 | `GITHUB_TOKEN` | Auto | GitHub token (for PR comments) |
 | `GITLAB_TOKEN` | Auto | GitLab token (for MR comments) |
 
