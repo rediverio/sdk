@@ -7,7 +7,6 @@ require (
 	github.com/google/uuid v1.6.0
 	gitlab.com/gitlab-org/api/client-go v0.119.0
 	golang.org/x/oauth2 v0.27.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
