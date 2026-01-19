@@ -230,6 +230,108 @@ func main() {
 }
 ```
 
+### 6b. Using Functional Options (AWS SDK style)
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+    "github.com/rediverio/sdk/pkg/client"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create client using functional options
+    apiClient := client.NewWithOptions(
+        client.WithBaseURL("https://api.rediver.io"),
+        client.WithAPIKey("your-api-key"),
+        client.WithWorkerID("worker-123"),
+        client.WithTimeout(30 * time.Second),
+        client.WithRetry(3, 2*time.Second),
+        client.WithVerbose(true),
+    )
+
+    // Push findings...
+}
+```
+
+### 6c. Error Handling Best Practices
+
+```go
+package main
+
+import (
+    "github.com/rediverio/sdk/pkg/client"
+)
+
+func handleError(err error) {
+    if client.IsAuthenticationError(err) {
+        // 401 - Invalid API key
+        log.Fatal("Authentication failed")
+    }
+
+    if client.IsAuthorizationError(err) {
+        // 403 - No permission
+        log.Fatal("Access denied")
+    }
+
+    if client.IsRateLimitError(err) {
+        // 429 - Rate limited
+        log.Println("Rate limited, will retry...")
+    }
+
+    if client.IsRetryable(err) {
+        // Network errors, 5xx errors (except 501)
+        log.Println("Retryable error, will retry...")
+    }
+
+    if httpErr, ok := client.IsHTTPError(err); ok {
+        log.Printf("HTTP %d: %s", httpErr.StatusCode, httpErr.Body)
+    }
+}
+```
+
+### 6d. Using GitHub Provider
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/rediverio/sdk/pkg/providers/github"
+    "github.com/rediverio/sdk/pkg/core"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create GitHub provider
+    provider := github.NewProvider(&github.Config{
+        Token:        os.Getenv("GITHUB_TOKEN"),
+        Organization: "my-org",
+        RateLimit:    5000, // requests per hour
+    })
+
+    // List available collectors
+    for _, collector := range provider.ListCollectors() {
+        fmt.Printf("- %s\n", collector.Name())
+    }
+    // Output: repos, code-scanning, dependabot
+
+    // Collect code scanning alerts
+    csCollector, _ := provider.GetCollector("code-scanning")
+    result, _ := csCollector.Collect(ctx, &core.CollectOptions{
+        Repository: "my-org/my-repo",
+    })
+
+    fmt.Printf("Found %d findings\n", result.TotalItems)
+}
+```
+
+
 ### 7. Persistent Retry Queue (Network Resilience)
 
 The SDK includes a persistent retry queue that ensures scan results are never lost due to temporary network failures. Failed uploads are automatically queued to disk and retried with exponential backoff.
@@ -380,25 +482,38 @@ func main() {
 
 ```
 sdk/
-├── pkg/                # Public library code
-│   ├── core/           # Core interfaces and base implementations
-│   ├── ris/            # RIS (Rediver Ingest Schema) types
-│   ├── scanners/       # Native scanner implementations
-│   │   ├── semgrep/    # Semgrep SAST scanner
-│   │   ├── gitleaks/   # Gitleaks secret scanner
-│   │   └── trivy/      # Trivy SCA scanner
-│   ├── client/         # Rediver API client
-│   ├── retry/          # Persistent retry queue for network resilience
-│   ├── shared/         # Shared packages (fingerprint, severity)
-│   │   ├── fingerprint/# Unified fingerprint generation
-│   │   └── severity/   # Unified severity mapping
-│   ├── gitenv/         # CI environment detection
-│   ├── strategy/       # Scan strategy determination
-│   └── handler/        # Scan lifecycle handlers
-├── internal/           # Private implementation code
-├── scripts/            # Build, lint, test scripts
-├── examples/           # Usage examples
-└── test/               # Integration tests
+├── pkg/                    # Public library code
+│   ├── core/               # Core interfaces and base implementations
+│   ├── ris/                # RIS (Rediver Ingest Schema) types
+│   ├── client/             # Rediver API client (HTTP + functional options)
+│   ├── scanners/           # Native scanner implementations
+│   │   ├── semgrep/        # Semgrep SAST scanner
+│   │   ├── gitleaks/       # Gitleaks secret scanner
+│   │   └── trivy/          # Trivy SCA scanner
+│   ├── connectors/         # External system connectors (rate-limited)
+│   │   ├── base.go         # BaseConnector with rate limiting
+│   │   └── github/         # GitHub API connector
+│   ├── providers/          # Complete integrations (Connector + Collectors)
+│   │   └── github/         # GitHub provider with 3 collectors
+│   ├── adapters/           # Format adapters (SARIF → RIS)
+│   │   └── sarif/          # SARIF to RIS adapter
+│   ├── transport/          # Transport layers
+│   │   └── grpc/           # gRPC transport with TLS/auth
+│   ├── errors/             # Custom error types
+│   ├── options/            # Functional options pattern
+│   ├── mocks/              # Mock interfaces for testing
+│   ├── retry/              # Persistent retry queue
+│   ├── shared/             # Shared packages (fingerprint, severity)
+│   ├── gitenv/             # CI environment detection
+│   ├── strategy/           # Scan strategy determination
+│   └── handler/            # Scan lifecycle handlers
+├── proto/                  # Protocol Buffer definitions
+│   └── rediver/v1/         # gRPC service definitions
+├── docs/                   # Documentation
+│   ├── ARCHITECTURE.md     # Worker/Agent/Component architecture
+│   └── GRPC.md             # gRPC configuration guide
+├── examples/               # Usage examples
+└── test/                   # Integration tests
 ```
 
 ## Interfaces Overview
@@ -406,10 +521,12 @@ sdk/
 | Interface | Purpose | Key Methods |
 |-----------|---------|-------------|
 | `Scanner` | Run security tools | `Scan()`, `IsInstalled()` |
-| `SecretScanner` | Secret detection | `Scan()` → `*SecretResult` |
-| `ScaScanner` | Dependency scanning | `Scan()` → `*ScaResult` |
 | `Parser` | Output conversion | `Parse()` → `*ris.Report` |
 | `Collector` | External data fetch | `Collect()`, `TestConnection()` |
+| `Connector` | External connections | `Connect()`, `WaitForRateLimit()` |
+| `Provider` | Bundles Connector + Collectors | `ListCollectors()`, `GetCollector()` |
+| `Adapter` | Format translation | `Convert()`, `CanConvert()` |
+| `Enricher` | Threat intel enrichment | `Enrich()` |
 | `Agent` | Daemon management | `Start()`, `Stop()`, `Status()` |
 | `Pusher` | API communication | `PushFindings()`, `SendHeartbeat()` |
 | `RetryQueue` | Persistent queue | `Enqueue()`, `Dequeue()`, `Stats()` |

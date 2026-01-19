@@ -4,6 +4,8 @@ package core
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	"github.com/rediverio/sdk/pkg/ris"
 )
@@ -493,4 +495,183 @@ type ProcessResult struct {
 
 	// Error
 	Error string `json:"error,omitempty"`
+}
+
+// =============================================================================
+// Connector Interface - For managing connections to external systems
+// =============================================================================
+
+// Connector manages connection to an external system with authentication,
+// rate limiting, and connection pooling.
+type Connector interface {
+	// Name returns the connector name (e.g., "github", "gitlab")
+	Name() string
+
+	// Type returns the connector type (e.g., "scm", "cloud", "ticketing")
+	Type() string
+
+	// Connect establishes connection to the external system
+	Connect(ctx context.Context) error
+
+	// Close closes the connection
+	Close() error
+
+	// IsConnected returns true if connected
+	IsConnected() bool
+
+	// TestConnection verifies the connection is working
+	TestConnection(ctx context.Context) error
+
+	// HTTPClient returns the configured HTTP client (with auth headers)
+	HTTPClient() *http.Client
+
+	// RateLimited returns true if rate limiting is enabled
+	RateLimited() bool
+
+	// WaitForRateLimit blocks until rate limit allows next request
+	WaitForRateLimit(ctx context.Context) error
+}
+
+// ConnectorConfig holds common configuration for connectors.
+type ConnectorConfig struct {
+	// Authentication
+	APIKey      string       `yaml:"api_key" json:"api_key"`
+	Token       string       `yaml:"token" json:"token"`
+	Username    string       `yaml:"username" json:"username"`
+	Password    string       `yaml:"password" json:"password"`
+	OAuthConfig *OAuthConfig `yaml:"oauth" json:"oauth,omitempty"`
+
+	// Connection
+	BaseURL string        `yaml:"base_url" json:"base_url"`
+	Timeout time.Duration `yaml:"timeout" json:"timeout"`
+
+	// Rate limiting
+	RateLimit  int `yaml:"rate_limit" json:"rate_limit"`   // requests per hour
+	BurstLimit int `yaml:"burst_limit" json:"burst_limit"` // burst size
+
+	// Retry
+	MaxRetries int           `yaml:"max_retries" json:"max_retries"`
+	RetryDelay time.Duration `yaml:"retry_delay" json:"retry_delay"`
+
+	// Debug
+	Verbose bool `yaml:"verbose" json:"verbose"`
+}
+
+// OAuthConfig holds OAuth configuration.
+type OAuthConfig struct {
+	ClientID     string   `yaml:"client_id" json:"client_id"`
+	ClientSecret string   `yaml:"client_secret" json:"client_secret"`
+	TokenURL     string   `yaml:"token_url" json:"token_url"`
+	Scopes       []string `yaml:"scopes" json:"scopes"`
+}
+
+// =============================================================================
+// Provider Interface - Complete integration bundles
+// =============================================================================
+
+// Provider bundles a Connector with multiple Collectors for complete integration.
+type Provider interface {
+	// Name returns the provider name (e.g., "github", "aws")
+	Name() string
+
+	// Connector returns the underlying connector
+	Connector() Connector
+
+	// ListCollectors returns all available collectors
+	ListCollectors() []Collector
+
+	// GetCollector returns a specific collector by name
+	GetCollector(name string) (Collector, error)
+
+	// Initialize sets up the provider with configuration
+	Initialize(ctx context.Context, config *ProviderConfig) error
+
+	// TestConnection tests the provider connection
+	TestConnection(ctx context.Context) error
+
+	// Close closes the provider and all collectors
+	Close() error
+}
+
+// ProviderConfig holds provider configuration.
+type ProviderConfig struct {
+	// Connector config
+	Connector ConnectorConfig `yaml:"connector" json:"connector"`
+
+	// Provider-specific settings
+	Settings map[string]any `yaml:"settings" json:"settings"`
+
+	// Which collectors to enable (empty = all)
+	EnabledCollectors []string `yaml:"enabled_collectors" json:"enabled_collectors"`
+}
+
+// =============================================================================
+// Adapter Interface - Format translation
+// =============================================================================
+
+// Adapter translates between different data formats and RIS.
+type Adapter interface {
+	// Name returns the adapter name (e.g., "sarif", "cyclonedx")
+	Name() string
+
+	// InputFormats returns supported input formats
+	InputFormats() []string
+
+	// OutputFormat returns the output format (usually "ris")
+	OutputFormat() string
+
+	// CanConvert checks if the input can be converted
+	CanConvert(input []byte) bool
+
+	// Convert transforms input to RIS Report
+	Convert(ctx context.Context, input []byte, opts *AdapterOptions) (*ris.Report, error)
+}
+
+// AdapterOptions configures adapter behavior.
+type AdapterOptions struct {
+	// Source information
+	SourceName string `yaml:"source_name" json:"source_name"`
+	SourceType string `yaml:"source_type" json:"source_type"`
+
+	// Target repository/asset info
+	Repository string `yaml:"repository" json:"repository"`
+	Branch     string `yaml:"branch" json:"branch"`
+	CommitSHA  string `yaml:"commit_sha" json:"commit_sha"`
+
+	// Filtering
+	MinSeverity string `yaml:"min_severity" json:"min_severity"`
+
+	// Debug
+	Verbose bool `yaml:"verbose" json:"verbose"`
+}
+
+// =============================================================================
+// Enricher Interface - Threat intelligence enrichment
+// =============================================================================
+
+// Enricher adds threat intelligence data to findings.
+type Enricher interface {
+	// Name returns the enricher name (e.g., "epss", "kev", "nvd")
+	Name() string
+
+	// Enrich adds threat intel to a single finding
+	Enrich(ctx context.Context, finding *ris.Finding) (*ris.Finding, error)
+
+	// EnrichBatch adds threat intel to multiple findings
+	EnrichBatch(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error)
+}
+
+// EnricherConfig holds enricher configuration.
+type EnricherConfig struct {
+	// API endpoint (optional, for custom sources)
+	Endpoint string `yaml:"endpoint" json:"endpoint"`
+
+	// Cache duration
+	CacheTTL time.Duration `yaml:"cache_ttl" json:"cache_ttl"`
+
+	// Rate limiting
+	RateLimit int `yaml:"rate_limit" json:"rate_limit"`
+
+	// Debug
+	Verbose bool `yaml:"verbose" json:"verbose"`
 }

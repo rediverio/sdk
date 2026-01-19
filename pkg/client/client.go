@@ -90,6 +90,79 @@ func New(cfg *Config) *Client {
 	}
 }
 
+// =============================================================================
+// Functional Options Pattern (AWS SDK style)
+// =============================================================================
+
+// Option is a function that configures the client.
+type Option func(*Client)
+
+// NewWithOptions creates a new client using functional options.
+// Example:
+//
+//	client := client.NewWithOptions(
+//	    client.WithBaseURL("https://api.rediver.io"),
+//	    client.WithAPIKey("xxx"),
+//	    client.WithWorkerID("worker-1"),
+//	    client.WithTimeout(30 * time.Second),
+//	)
+func NewWithOptions(opts ...Option) *Client {
+	c := &Client{
+		maxRetries: 3,
+		retryDelay: 2 * time.Second,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// WithBaseURL sets the API base URL.
+func WithBaseURL(url string) Option {
+	return func(c *Client) {
+		c.baseURL = url
+	}
+}
+
+// WithAPIKey sets the API key.
+func WithAPIKey(key string) Option {
+	return func(c *Client) {
+		c.apiKey = key
+	}
+}
+
+// WithWorkerID sets the worker ID.
+func WithWorkerID(id string) Option {
+	return func(c *Client) {
+		c.workerID = id
+	}
+}
+
+// WithTimeout sets the HTTP timeout.
+func WithTimeout(d time.Duration) Option {
+	return func(c *Client) {
+		c.httpClient.Timeout = d
+	}
+}
+
+// WithRetry sets retry configuration.
+func WithRetry(maxRetries int, retryDelay time.Duration) Option {
+	return func(c *Client) {
+		c.maxRetries = maxRetries
+		c.retryDelay = retryDelay
+	}
+}
+
+// WithVerbose enables verbose logging.
+func WithVerbose(v bool) Option {
+	return func(c *Client) {
+		c.verbose = v
+	}
+}
+
 // IngestResponse is the response from ingest endpoints.
 type IngestResponse struct {
 	ScanID          string   `json:"scan_id"`
@@ -460,31 +533,95 @@ func (c *Client) doRequestOnce(ctx context.Context, method, url string, body []b
 
 // HTTPError represents an HTTP error response.
 type HTTPError struct {
-	StatusCode int
-	Body       string
+	StatusCode int    `json:"status_code"`
+	Body       string `json:"body"`
+	RequestID  string `json:"request_id,omitempty"`
 }
 
 func (e *HTTPError) Error() string {
+	if e.RequestID != "" {
+		return fmt.Sprintf("http %d: %s (request_id: %s)", e.StatusCode, e.Body, e.RequestID)
+	}
 	return fmt.Sprintf("http %d: %s", e.StatusCode, e.Body)
 }
 
-// isClientError checks if the error is a 4xx client error.
-func isClientError(err error) bool {
+// =============================================================================
+// Error Checking Helpers (Public API)
+// =============================================================================
+
+// IsHTTPError checks if err is an HTTPError and returns it.
+func IsHTTPError(err error) (*HTTPError, bool) {
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {
+		return httpErr, true
+	}
+	return nil, false
+}
+
+// IsClientError checks if the error is a 4xx client error.
+func IsClientError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
 		return httpErr.StatusCode >= 400 && httpErr.StatusCode < 500
 	}
 	return false
 }
 
-// isRateLimitError checks if the error is a 429 rate limit error.
-func isRateLimitError(err error) bool {
-	var httpErr *HTTPError
-	if errors.As(err, &httpErr) {
+// IsServerError checks if the error is a 5xx server error.
+func IsServerError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
+		return httpErr.StatusCode >= 500
+	}
+	return false
+}
+
+// IsRateLimitError checks if the error is a 429 rate limit error.
+func IsRateLimitError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
 		return httpErr.StatusCode == 429
 	}
 	return false
 }
+
+// IsAuthenticationError checks if the error is a 401 authentication error.
+func IsAuthenticationError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
+		return httpErr.StatusCode == 401
+	}
+	return false
+}
+
+// IsAuthorizationError checks if the error is a 403 authorization error.
+func IsAuthorizationError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
+		return httpErr.StatusCode == 403
+	}
+	return false
+}
+
+// IsNotFoundError checks if the error is a 404 not found error.
+func IsNotFoundError(err error) bool {
+	if httpErr, ok := IsHTTPError(err); ok {
+		return httpErr.StatusCode == 404
+	}
+	return false
+}
+
+// IsRetryable checks if the error should be retried.
+func IsRetryable(err error) bool {
+	// Rate limit errors are retryable
+	if IsRateLimitError(err) {
+		return true
+	}
+	// Server errors (except 501) are retryable
+	if httpErr, ok := IsHTTPError(err); ok {
+		return httpErr.StatusCode >= 500 && httpErr.StatusCode != 501
+	}
+	return false
+}
+
+// Private helpers (keep backward compatibility)
+func isClientError(err error) bool    { return IsClientError(err) }
+func isRateLimitError(err error) bool { return IsRateLimitError(err) }
 
 // SetVerbose sets verbose mode.
 func (c *Client) SetVerbose(v bool) {
@@ -887,4 +1024,232 @@ func (c *Client) Close() error {
 	}
 
 	return nil
+}
+
+// =============================================================================
+// Exposure Events API
+// =============================================================================
+
+// ExposureEvent represents an attack surface change event.
+type ExposureEvent struct {
+	// Event type: new_asset, asset_removed, exposure_detected, exposure_resolved
+	Type string `json:"type"`
+
+	// Asset identifier
+	AssetID   string `json:"asset_id,omitempty"`
+	AssetType string `json:"asset_type,omitempty"`
+	AssetName string `json:"asset_name,omitempty"`
+
+	// Exposure details
+	ExposureType string `json:"exposure_type,omitempty"` // port_open, service_exposed, etc.
+	Protocol     string `json:"protocol,omitempty"`
+	Port         int    `json:"port,omitempty"`
+	Service      string `json:"service,omitempty"`
+
+	// Detection info
+	DetectedAt  time.Time `json:"detected_at"`
+	DetectedBy  string    `json:"detected_by,omitempty"` // scan source
+	Severity    string    `json:"severity,omitempty"`
+	Description string    `json:"description,omitempty"`
+
+	// Resolution
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+
+	// Metadata
+	Tags       []string       `json:"tags,omitempty"`
+	Properties map[string]any `json:"properties,omitempty"`
+}
+
+// PushExposuresResult is the result of pushing exposure events.
+type PushExposuresResult struct {
+	EventsCreated int `json:"events_created"`
+	EventsUpdated int `json:"events_updated"`
+	EventsSkipped int `json:"events_skipped"`
+}
+
+// PushExposures sends exposure events to Rediver.
+func (c *Client) PushExposures(ctx context.Context, events []ExposureEvent) (*PushExposuresResult, error) {
+	url := fmt.Sprintf("%s/api/v1/exposures/ingest", c.baseURL)
+
+	if c.verbose {
+		fmt.Printf("[rediver] Pushing %d exposure events to %s\n", len(events), url)
+	}
+
+	input := struct {
+		WorkerID string          `json:"worker_id,omitempty"`
+		Events   []ExposureEvent `json:"events"`
+	}{
+		WorkerID: c.workerID,
+		Events:   events,
+	}
+
+	body, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal events: %w", err)
+	}
+
+	data, err := c.doRequest(ctx, "POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp PushExposuresResult
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[rediver] Exposure push completed: %d created, %d updated\n",
+			resp.EventsCreated, resp.EventsUpdated)
+	}
+
+	return &resp, nil
+}
+
+// =============================================================================
+// Threat Intelligence API
+// =============================================================================
+
+// EPSSScore represents an EPSS score for a CVE.
+type EPSSScore struct {
+	CVEID      string    `json:"cve_id"`
+	Score      float64   `json:"score"`      // 0.0 to 1.0
+	Percentile float64   `json:"percentile"` // 0.0 to 100.0
+	Date       time.Time `json:"date"`
+}
+
+// GetEPSSScores fetches EPSS scores for the given CVE IDs.
+func (c *Client) GetEPSSScores(ctx context.Context, cveIDs []string) ([]EPSSScore, error) {
+	if len(cveIDs) == 0 {
+		return nil, nil
+	}
+
+	url := fmt.Sprintf("%s/api/v1/threatintel/epss", c.baseURL)
+
+	if c.verbose {
+		fmt.Printf("[rediver] Fetching EPSS scores for %d CVEs\n", len(cveIDs))
+	}
+
+	input := struct {
+		CVEIDs []string `json:"cve_ids"`
+	}{
+		CVEIDs: cveIDs,
+	}
+
+	body, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	data, err := c.doRequest(ctx, "POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Scores []EPSSScore `json:"scores"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return resp.Scores, nil
+}
+
+// KEVEntry represents a CISA Known Exploited Vulnerabilities entry.
+type KEVEntry struct {
+	CVEID                      string    `json:"cve_id"`
+	VendorProject              string    `json:"vendor_project"`
+	Product                    string    `json:"product"`
+	VulnerabilityName          string    `json:"vulnerability_name"`
+	DateAdded                  time.Time `json:"date_added"`
+	ShortDescription           string    `json:"short_description"`
+	RequiredAction             string    `json:"required_action"`
+	DueDate                    time.Time `json:"due_date"`
+	KnownRansomwareCampaignUse string    `json:"known_ransomware_campaign_use"`
+}
+
+// GetKEVEntries fetches CISA KEV entries for the given CVE IDs.
+func (c *Client) GetKEVEntries(ctx context.Context, cveIDs []string) ([]KEVEntry, error) {
+	if len(cveIDs) == 0 {
+		return nil, nil
+	}
+
+	url := fmt.Sprintf("%s/api/v1/threatintel/kev", c.baseURL)
+
+	if c.verbose {
+		fmt.Printf("[rediver] Fetching KEV entries for %d CVEs\n", len(cveIDs))
+	}
+
+	input := struct {
+		CVEIDs []string `json:"cve_ids"`
+	}{
+		CVEIDs: cveIDs,
+	}
+
+	body, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	data, err := c.doRequest(ctx, "POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Entries []KEVEntry `json:"entries"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return resp.Entries, nil
+}
+
+// EnrichFindings adds EPSS and KEV data to findings with CVE IDs.
+func (c *Client) EnrichFindings(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error) {
+	// Collect CVE IDs
+	cveIDs := make([]string, 0)
+	for _, f := range findings {
+		if f.Vulnerability != nil && f.Vulnerability.CVEID != "" {
+			cveIDs = append(cveIDs, f.Vulnerability.CVEID)
+		}
+	}
+
+	if len(cveIDs) == 0 {
+		return findings, nil
+	}
+
+	// Fetch EPSS scores
+	epssScores, _ := c.GetEPSSScores(ctx, cveIDs)
+	epssMap := make(map[string]EPSSScore)
+	for _, score := range epssScores {
+		epssMap[score.CVEID] = score
+	}
+
+	// Fetch KEV entries
+	kevEntries, _ := c.GetKEVEntries(ctx, cveIDs)
+	kevMap := make(map[string]bool)
+	for _, entry := range kevEntries {
+		kevMap[entry.CVEID] = true
+	}
+
+	// Enrich findings
+	result := make([]ris.Finding, len(findings))
+	for i, f := range findings {
+		result[i] = f
+		if f.Vulnerability != nil && f.Vulnerability.CVEID != "" {
+			cveID := f.Vulnerability.CVEID
+			if epss, ok := epssMap[cveID]; ok {
+				result[i].Vulnerability.EPSSScore = epss.Score
+				result[i].Vulnerability.EPSSPercentile = epss.Percentile
+			}
+			if kevMap[cveID] {
+				result[i].Vulnerability.InCISAKEV = true
+			}
+		}
+	}
+
+	return result, nil
 }
