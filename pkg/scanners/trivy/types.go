@@ -60,6 +60,34 @@ type Result struct {
 	Misconfigurations []Misconfiguration `json:"Misconfigurations,omitempty"`
 	Secrets           []Secret           `json:"Secrets,omitempty"`
 	Licenses          []License          `json:"Licenses,omitempty"`
+	Packages          []Package          `json:"Packages,omitempty"`
+}
+
+// Package represents a dependency package.
+type Package struct {
+	ID       string   `json:"ID"`
+	Name     string   `json:"Name"`
+	Version  string   `json:"Version"`
+	PkgPath  string   `json:"PkgPath,omitempty"`
+	Layer    *Layer   `json:"Layer,omitempty"`
+	FilePath string   `json:"FilePath,omitempty"`
+	Licenses []string `json:"Licenses,omitempty"`
+
+	// Dependencies
+	DependsOn []string `json:"DependsOn,omitempty"`
+
+	// Relationship
+	Relationship string `json:"Relationship,omitempty"` // root, direct, indirect, unknown
+	Indirect     bool   `json:"Indirect,omitempty"`
+
+	// Identifiers
+	Identifier PkgIdentifier `json:"Identifier,omitempty"`
+}
+
+// PkgIdentifier contains package identifiers.
+type PkgIdentifier struct {
+	PURL string `json:"PURL,omitempty"`
+	UID  string `json:"UID,omitempty"`
 }
 
 // =============================================================================

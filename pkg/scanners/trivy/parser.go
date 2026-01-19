@@ -96,6 +96,12 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 			finding := p.parseSecret(&result, &secret, opts)
 			report.Findings = append(report.Findings, finding)
 		}
+
+		// Parse packages (SBOM)
+		for _, pkg := range result.Packages {
+			dep := p.parsePackage(&result, &pkg, opts)
+			report.Dependencies = append(report.Dependencies, dep)
+		}
 	}
 
 	if p.Verbose {
@@ -339,6 +345,46 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 	finding.Tags = []string{"secret", secret.Category}
 
 	return finding
+}
+
+// parsePackage converts Trivy package to RIS dependency.
+func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOptions) ris.Dependency {
+	id := p.generateFingerprint("pkg", result.Target, pkg.Name, pkg.Version)
+
+	dep := ris.Dependency{
+		ID:           id,
+		Name:         pkg.Name,
+		Version:      pkg.Version,
+		PURL:         pkg.Identifier.PURL,
+		Licenses:     pkg.Licenses,
+		Relationship: pkg.Relationship,
+		DependsOn:    pkg.DependsOn,
+	}
+
+	// Determine ecosystem
+	if pkg.Identifier.PURL != "" {
+		// pkg:golang/github.com/foo/bar -> golang
+		if parts := strings.Split(pkg.Identifier.PURL, "/"); len(parts) > 0 {
+			if typeParams := strings.Split(parts[0], ":"); len(typeParams) > 1 {
+				dep.Ecosystem = typeParams[1]
+			}
+		}
+	}
+	if dep.Ecosystem == "" {
+		dep.Ecosystem = result.Type
+	}
+
+	// Set location
+	dep.Location = &ris.FindingLocation{
+		Path: result.Target,
+	}
+	if pkg.FilePath != "" {
+		dep.Location.Path = pkg.FilePath
+	} else if pkg.PkgPath != "" {
+		dep.Location.Path = pkg.PkgPath
+	}
+
+	return dep
 }
 
 // buildVulnTitle builds a title for vulnerability.

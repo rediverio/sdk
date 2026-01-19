@@ -25,6 +25,9 @@ type Report struct {
 	// Findings discovered
 	Findings []Finding `json:"findings,omitempty"`
 
+	// Dependencies (SBOM)
+	Dependencies []Dependency `json:"dependencies,omitempty"`
+
 	// Custom properties
 	Properties Properties `json:"properties,omitempty"`
 }

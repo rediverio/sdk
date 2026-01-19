@@ -9,6 +9,7 @@ import (
 
 	"github.com/rediverio/sdk/pkg/core"
 	"github.com/rediverio/sdk/pkg/scanners/gitleaks"
+	"github.com/rediverio/sdk/pkg/scanners/nuclei"
 	"github.com/rediverio/sdk/pkg/scanners/semgrep"
 	"github.com/rediverio/sdk/pkg/scanners/trivy"
 )
@@ -295,6 +296,92 @@ type TrivyOptions struct {
 	SkipDBUpdate  bool          // Skip vulnerability DB update
 	OfflineScan   bool          // Run in offline mode
 	Verbose       bool          // Enable verbose output
+}
+
+// NucleiScanner is a type alias for external package access.
+type NucleiScanner = nuclei.Scanner
+
+// Nuclei returns a new nuclei scanner with default configuration.
+func Nuclei() *nuclei.Scanner {
+	return nuclei.NewScanner()
+}
+
+// NucleiDAST returns a nuclei scanner configured for DAST scanning with safe defaults.
+func NucleiDAST() *nuclei.Scanner {
+	return nuclei.NewDAST()
+}
+
+// NucleiVuln returns a nuclei scanner focused on CVE/vulnerability detection.
+func NucleiVuln() *nuclei.Scanner {
+	return nuclei.NewVulnScanner()
+}
+
+// NucleiMisconfig returns a nuclei scanner focused on misconfiguration detection.
+func NucleiMisconfig() *nuclei.Scanner {
+	return nuclei.NewMisconfigScanner()
+}
+
+// NucleiTakeover returns a nuclei scanner focused on subdomain takeover detection.
+func NucleiTakeover() *nuclei.Scanner {
+	return nuclei.NewTakeoverScanner()
+}
+
+// NucleiWithConfig returns a nuclei scanner with custom configuration.
+func NucleiWithConfig(opts NucleiOptions) *nuclei.Scanner {
+	scanner := nuclei.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if len(opts.Tags) > 0 {
+		scanner.Tags = opts.Tags
+	}
+	if len(opts.ExcludeTags) > 0 {
+		scanner.ExcludeTags = opts.ExcludeTags
+	}
+	if len(opts.Severity) > 0 {
+		scanner.Severity = opts.Severity
+	}
+	if len(opts.Templates) > 0 {
+		scanner.Templates = opts.Templates
+	}
+	if opts.TemplateDir != "" {
+		scanner.TemplateDir = opts.TemplateDir
+	}
+	if opts.RateLimit > 0 {
+		scanner.RateLimit = opts.RateLimit
+	}
+	if opts.Concurrency > 0 {
+		scanner.Concurrency = opts.Concurrency
+	}
+	if opts.Proxy != "" {
+		scanner.Proxy = opts.Proxy
+	}
+	scanner.Headless = opts.Headless
+	scanner.NoInteractsh = opts.NoInteractsh
+	scanner.FollowRedirects = opts.FollowRedirects
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// NucleiOptions configures the nuclei scanner.
+type NucleiOptions struct {
+	Binary          string        // Path to nuclei binary
+	Timeout         time.Duration // Scan timeout
+	Tags            []string      // Filter templates by tags
+	ExcludeTags     []string      // Exclude templates by tags
+	Severity        []string      // Filter by severity: critical, high, medium, low, info
+	Templates       []string      // Specific templates to use
+	TemplateDir     string        // Directory containing templates
+	RateLimit       int           // Requests per second
+	Concurrency     int           // Number of concurrent templates
+	Proxy           string        // HTTP/SOCKS proxy
+	Headless        bool          // Enable headless browser
+	NoInteractsh    bool          // Disable interactsh server
+	FollowRedirects bool          // Follow redirects
+	Verbose         bool          // Enable verbose output
 }
 
 // =============================================================================
