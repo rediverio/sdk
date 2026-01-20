@@ -239,6 +239,12 @@ type HeartbeatRequest struct {
 	Uptime     int64           `json:"uptime_seconds,omitempty"`
 	TotalScans int64           `json:"total_scans,omitempty"`
 	Errors     int64           `json:"errors,omitempty"`
+
+	// System Metrics
+	CPUPercent    float64 `json:"cpu_percent,omitempty"`
+	MemoryPercent float64 `json:"memory_percent,omitempty"`
+	ActiveJobs    int     `json:"active_jobs,omitempty"`
+	Region        string  `json:"region,omitempty"`
 }
 
 // PushFindings sends findings to Rediver.
@@ -375,6 +381,11 @@ func (c *Client) SendHeartbeat(ctx context.Context, status *core.AgentStatus) er
 		TotalScans: status.TotalScans,
 		Errors:     status.Errors,
 		Message:    status.Message,
+		// System metrics
+		CPUPercent:    status.CPUPercent,
+		MemoryPercent: status.MemoryPercent,
+		ActiveJobs:    status.ActiveJobs,
+		Region:        status.Region,
 	}
 
 	body, err := json.Marshal(req)

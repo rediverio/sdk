@@ -20,6 +20,7 @@ type BaseAgent struct {
 	name     string
 	version  string
 	hostname string
+	region   string
 
 	// Components
 	scanners   map[string]Scanner
@@ -48,6 +49,7 @@ type BaseAgent struct {
 type BaseAgentConfig struct {
 	Name              string        `yaml:"name" json:"name"`
 	Version           string        `yaml:"version" json:"version"`
+	Region            string        `yaml:"region" json:"region"` // Deployment region (e.g., "us-east-1", "ap-southeast-1")
 	ScanInterval      time.Duration `yaml:"scan_interval" json:"scan_interval"`
 	CollectInterval   time.Duration `yaml:"collect_interval" json:"collect_interval"`
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval" json:"heartbeat_interval"`
@@ -55,9 +57,37 @@ type BaseAgentConfig struct {
 	Verbose           bool          `yaml:"verbose" json:"verbose"`
 }
 
+// detectRegion detects the deployment region from config or environment variables.
+// Priority: config > REDIVER_REGION > AWS_REGION > AWS_DEFAULT_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
+func detectRegion(configRegion string) string {
+	if configRegion != "" {
+		return configRegion
+	}
+
+	// Check environment variables in priority order
+	envVars := []string{
+		"REDIVER_REGION",
+		"AWS_REGION",
+		"AWS_DEFAULT_REGION",
+		"GOOGLE_CLOUD_REGION",
+		"CLOUD_REGION",
+		"AZURE_REGION",
+		"REGION",
+	}
+
+	for _, env := range envVars {
+		if val := os.Getenv(env); val != "" {
+			return val
+		}
+	}
+
+	return ""
+}
+
 // NewBaseAgent creates a new base agent.
 func NewBaseAgent(cfg *BaseAgentConfig, pusher Pusher) *BaseAgent {
 	hostname, _ := os.Hostname()
+	region := detectRegion(cfg.Region)
 
 	// Set defaults
 	if cfg.ScanInterval == 0 {
@@ -74,6 +104,7 @@ func NewBaseAgent(cfg *BaseAgentConfig, pusher Pusher) *BaseAgent {
 		name:              cfg.Name,
 		version:           cfg.Version,
 		hostname:          hostname,
+		region:            region,
 		scanners:          make(map[string]Scanner),
 		collectors:        make(map[string]Collector),
 		pusher:            pusher,
@@ -87,6 +118,7 @@ func NewBaseAgent(cfg *BaseAgentConfig, pusher Pusher) *BaseAgent {
 			Status:     AgentStateStopped,
 			Scanners:   []string{},
 			Collectors: []string{},
+			Region:     region,
 		},
 		stopCh:  make(chan struct{}),
 		verbose: cfg.Verbose,

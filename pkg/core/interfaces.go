@@ -414,6 +414,12 @@ type AgentStatus struct {
 	TotalFindings int64      `json:"total_findings"`
 	Errors        int64      `json:"errors"`
 	Message       string     `json:"message,omitempty"`
+
+	// System Metrics (collected from worker)
+	CPUPercent    float64 `json:"cpu_percent,omitempty"`
+	MemoryPercent float64 `json:"memory_percent,omitempty"`
+	ActiveJobs    int     `json:"active_jobs,omitempty"`
+	Region        string  `json:"region,omitempty"`
 }
 
 // =============================================================================
