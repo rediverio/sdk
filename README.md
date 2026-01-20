@@ -757,12 +757,15 @@ security-scan:
 | `API_URL` | Yes* | Platform API URL |
 | `API_KEY` | Yes* | API key for authentication |
 | `WORKER_ID` | No | Worker identifier for tracking |
+| `REGION` | No | Deployment region (e.g., `us-east-1`, `ap-southeast-1`) |
 | `RETRY_QUEUE` | No | Enable retry queue (`true`/`false`) |
 | `RETRY_DIR` | No | Custom retry queue directory |
 | `GITHUB_TOKEN` | Auto | GitHub token (for PR comments) |
 | `GITLAB_TOKEN` | Auto | GitLab token (for MR comments) |
 
 *Required when using `-push` flag
+
+**Region Auto-Detection:** If `REGION` is not set, the agent will auto-detect from cloud environment variables: `AWS_REGION`, `GOOGLE_CLOUD_REGION`, `AZURE_REGION`.
 
 ## Best Practices
 

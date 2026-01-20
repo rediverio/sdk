@@ -58,21 +58,21 @@ type BaseAgentConfig struct {
 }
 
 // detectRegion detects the deployment region from config or environment variables.
-// Priority: config > REDIVER_REGION > AWS_REGION > AWS_DEFAULT_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
+// Priority: config > REGION > AWS_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
 func detectRegion(configRegion string) string {
 	if configRegion != "" {
 		return configRegion
 	}
 
 	// Check environment variables in priority order
+	// REGION is the recommended generic variable
+	// Cloud-specific variables are auto-detected for convenience
 	envVars := []string{
-		"REDIVER_REGION",
+		"REGION",
 		"AWS_REGION",
 		"AWS_DEFAULT_REGION",
 		"GOOGLE_CLOUD_REGION",
-		"CLOUD_REGION",
 		"AZURE_REGION",
-		"REGION",
 	}
 
 	for _, env := range envVars {

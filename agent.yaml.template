@@ -16,8 +16,8 @@ agent:
 
   # Deployment region (shown in UI for monitoring)
   # Examples: "us-east-1", "ap-southeast-1", "eu-west-1"
-  # Auto-detection: If not set, agent will try to detect from environment:
-  #   REDIVER_REGION > AWS_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
+  # Auto-detection: If not set, agent will detect from environment:
+  #   REGION > AWS_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
   region: ""
 
   # Enable remote command execution from Rediver platform
