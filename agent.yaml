@@ -10,7 +10,7 @@ agent:
 server:
   base_url: ${API_URL}
   api_key: ${API_KEY}
-  worker_id: ${WORKER_ID}
+  agent_id: ${AGENT_ID}
 
 scanners:
   - name: semgrep

@@ -24,7 +24,7 @@ import (
 type Client struct {
 	baseURL    string
 	apiKey     string
-	workerID   string // Worker ID for tracking which scanner/runner is pushing
+	agentID    string // Agent ID for tracking which agent is pushing
 	httpClient *http.Client
 	maxRetries int
 	retryDelay time.Duration
@@ -43,7 +43,7 @@ var _ core.Pusher = (*Client)(nil)
 type Config struct {
 	BaseURL    string        `yaml:"base_url" json:"base_url"`
 	APIKey     string        `yaml:"api_key" json:"api_key"`
-	WorkerID   string        `yaml:"worker_id" json:"worker_id"` // Registered worker ID for audit trail
+	AgentID    string        `yaml:"agent_id" json:"agent_id"` // Registered agent ID for audit trail
 	Timeout    time.Duration `yaml:"timeout" json:"timeout"`
 	MaxRetries int           `yaml:"max_retries" json:"max_retries"`
 	RetryDelay time.Duration `yaml:"retry_delay" json:"retry_delay"`
@@ -80,7 +80,7 @@ func New(cfg *Config) *Client {
 	return &Client{
 		baseURL:    cfg.BaseURL,
 		apiKey:     cfg.APIKey,
-		workerID:   cfg.WorkerID,
+		agentID:    cfg.AgentID,
 		maxRetries: cfg.MaxRetries,
 		retryDelay: cfg.RetryDelay,
 		httpClient: &http.Client{
@@ -103,7 +103,7 @@ type Option func(*Client)
 //	client := client.NewWithOptions(
 //	    client.WithBaseURL("https://api.rediver.io"),
 //	    client.WithAPIKey("xxx"),
-//	    client.WithWorkerID("worker-1"),
+//	    client.WithAgentID("agent-1"),
 //	    client.WithTimeout(30 * time.Second),
 //	)
 func NewWithOptions(opts ...Option) *Client {
@@ -134,10 +134,10 @@ func WithAPIKey(key string) Option {
 	}
 }
 
-// WithWorkerID sets the worker ID.
-func WithWorkerID(id string) Option {
+// WithAgentID sets the agent ID for tracking which agent is pushing data.
+func WithAgentID(id string) Option {
 	return func(c *Client) {
-		c.workerID = id
+		c.agentID = id
 	}
 }
 
@@ -190,7 +190,7 @@ type IngestMetadata struct {
 	ScanID      string    `json:"scan_id"`
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
-	WorkerID    string    `json:"worker_id,omitempty"`
+	AgentID     string    `json:"agent_id,omitempty"`
 }
 
 // IngestTarget represents a target asset.
@@ -519,9 +519,9 @@ func (c *Client) doRequestOnce(ctx context.Context, method, url string, body []b
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("User-Agent", "sdk/1.0")
 
-	// Add worker ID header for audit trail
-	if c.workerID != "" {
-		req.Header.Set("X-Rediver-Worker-ID", c.workerID)
+	// Add agent ID header for audit trail
+	if c.agentID != "" {
+		req.Header.Set("X-Agent-ID", c.agentID)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -663,7 +663,7 @@ func (c *Client) convertToIngestInput(report *ris.Report) *IngestInput {
 			ScanID:      scanID,
 			StartTime:   report.Metadata.Timestamp,
 			EndTime:     time.Now(),
-			WorkerID:    c.workerID,
+			AgentID:     c.agentID,
 		},
 		Targets:  make([]IngestTarget, 0, len(report.Assets)),
 		Findings: make([]IngestFinding, 0, len(report.Findings)),
@@ -783,7 +783,7 @@ func (c *Client) queueForRetry(ctx context.Context, report *ris.Report, itemType
 		Type:        itemType,
 		Report:      report,
 		LastError:   originalErr.Error(),
-		WorkerID:    c.workerID,
+		AgentID:     c.agentID,
 		ScannerName: "",
 	}
 
@@ -1087,11 +1087,11 @@ func (c *Client) PushExposures(ctx context.Context, events []ExposureEvent) (*Pu
 	}
 
 	input := struct {
-		WorkerID string          `json:"worker_id,omitempty"`
-		Events   []ExposureEvent `json:"events"`
+		AgentID string          `json:"agent_id,omitempty"`
+		Events  []ExposureEvent `json:"events"`
 	}{
-		WorkerID: c.workerID,
-		Events:   events,
+		AgentID: c.agentID,
+		Events:  events,
 	}
 
 	body, err := json.Marshal(input)

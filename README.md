@@ -215,7 +215,7 @@ func main() {
     apiClient := client.New(&client.Config{
         BaseURL:  "https://api.rediver.io",
         APIKey:   "your-api-key",
-        WorkerID: "worker-123",
+        AgentID: "agent-123",
     })
 
     // Push findings
@@ -248,7 +248,7 @@ func main() {
     apiClient := client.NewWithOptions(
         client.WithBaseURL("https://api.rediver.io"),
         client.WithAPIKey("your-api-key"),
-        client.WithWorkerID("worker-123"),
+        client.WithAgentID("agent-123"),
         client.WithTimeout(30 * time.Second),
         client.WithRetry(3, 2*time.Second),
         client.WithVerbose(true),
@@ -353,7 +353,7 @@ func main() {
     apiClient := client.New(&client.Config{
         BaseURL:  "https://api.rediver.io",
         APIKey:   "your-api-key",
-        WorkerID: "worker-123",
+        AgentID: "agent-123",
 
         // Enable persistent retry queue
         EnableRetryQueue: true,
@@ -510,7 +510,7 @@ sdk/
 ├── proto/                  # Protocol Buffer definitions
 │   └── rediver/v1/         # gRPC service definitions
 ├── docs/                   # Documentation
-│   ├── ARCHITECTURE.md     # Worker/Agent/Component architecture
+│   ├── ARCHITECTURE.md     # Agent/Component architecture
 │   └── GRPC.md             # gRPC configuration guide
 ├── examples/               # Usage examples
 └── test/                   # Integration tests
@@ -756,7 +756,7 @@ security-scan:
 |----------|----------|-------------|
 | `API_URL` | Yes* | Platform API URL |
 | `API_KEY` | Yes* | API key for authentication |
-| `WORKER_ID` | No | Worker identifier for tracking |
+| `AGENT_ID` | No | Agent identifier for tracking |
 | `REGION` | No | Deployment region (e.g., `us-east-1`, `ap-southeast-1`) |
 | `RETRY_QUEUE` | No | Enable retry queue (`true`/`false`) |
 | `RETRY_DIR` | No | Custom retry queue directory |

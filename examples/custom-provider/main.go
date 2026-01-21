@@ -79,9 +79,9 @@ func main() {
 	// Push results to Rediver platform
 	if os.Getenv("API_URL") != "" {
 		apiClient := client.New(&client.Config{
-			BaseURL:  os.Getenv("API_URL"),
-			APIKey:   os.Getenv("API_KEY"),
-			WorkerID: os.Getenv("WORKER_ID"),
+			BaseURL: os.Getenv("API_URL"),
+			APIKey:  os.Getenv("API_KEY"),
+			AgentID: os.Getenv("AGENT_ID"),
 		})
 
 		for _, report := range result.Reports {

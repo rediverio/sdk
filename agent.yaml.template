@@ -48,9 +48,9 @@ server:
   # Use environment variable: ${API_KEY}
   api_key: "your-api-key-here"
 
-  # Worker ID (auto-generated if not provided)
-  # Use environment variable: ${WORKER_ID}
-  worker_id: ""
+  # Agent ID (auto-generated if not provided)
+  # Use environment variable: ${AGENT_ID}
+  agent_id: ""
 
   # Request timeout
   timeout: 30s

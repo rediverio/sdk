@@ -4,7 +4,7 @@ This document explains the core architecture of the Rediver platform and how the
 
 ## Overview
 
-Rediver is a security platform that collects, analyzes, and manages security findings from various sources. The architecture follows a **Worker-Agent-Component** model.
+Rediver is a security platform that collects, analyzes, and manages security findings from various sources. The architecture follows an **Agent-Component** model.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -14,7 +14,7 @@ Rediver is a security platform that collects, analyzes, and manages security fin
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                         BACKEND API                                  │   │
 │  │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐            │   │
-│  │   │   Workers   │    │  Findings   │    │   Assets    │            │   │
+│  │   │   Agents    │    │  Findings   │    │   Assets    │            │   │
 │  │   │  Registry   │    │   Storage   │    │  Inventory  │            │   │
 │  │   └─────────────┘    └─────────────┘    └─────────────┘            │   │
 │  │         ▲                   ▲                  ▲                    │   │
@@ -33,7 +33,7 @@ Rediver is a security platform that collects, analyzes, and manages security fin
      │                             │  │                          │
      │  ┌────────────────────────┐ │  │  ┌────────────────────┐  │
      │  │    SDK CLIENT          │ │  │  │    SDK CLIENT      │  │
-     │  │  (worker_id: xxx)      │ │  │  │  (worker_id: yyy)  │  │
+     │  │  (agent_id: xxx)      │ │  │  │  (agent_id: yyy)  │  │
      │  └────────────────────────┘ │  │  └────────────────────┘  │
      │            │                │  │           │              │
      │  ┌─────────┴─────────┐     │  │  ┌────────┴────────┐     │
@@ -47,31 +47,40 @@ Rediver is a security platform that collects, analyzes, and manages security fin
 
 ## Key Concepts
 
-### 1. Worker
+### 1. Agent
 
-A **Worker** is the identity registered on the server. Every component that pushes data to Rediver does so through a Worker.
+An **Agent** is the identity registered on the server. Every component that pushes data to Rediver does so through an Agent.
 
 ```go
-// Worker is identified by worker_id
+// Agent is identified by agent_id
 client := client.New(&client.Config{
     BaseURL:  "https://api.rediver.io",
     APIKey:   "your-api-key",
-    WorkerID: "worker-123",  // ← This is the Worker identity
+    AgentID: "agent-123",  // ← This is the Agent identity
 })
 ```
 
-**Worker responsibilities:**
+**Agent responsibilities:**
 - Registered in the backend database
 - Receives commands from the server
 - Sends heartbeats to report status
-- All pushed data is tagged with `worker_id` for audit trail
+- All pushed data is tagged with `agent_id` for audit trail
 
-### 2. Agent
+**Agent types:**
 
-An **Agent** is a long-running process that orchestrates Scanners, Collectors, and Providers. It uses the SDK Client (with a Worker ID) to communicate with the server.
+| Type | Description | Execution Mode |
+|------|-------------|----------------|
+| `runner` | CI/CD one-shot scans | One-shot |
+| `worker` | Server-controlled daemon | Daemon |
+| `collector` | Data collection agent | Daemon |
+| `sensor` | EASM sensor | Daemon |
+
+### 2. Agent Process
+
+An **Agent Process** orchestrates Scanners, Collectors, and Providers. It uses the SDK Client to communicate with the server.
 
 ```go
-// Agent uses SDK Client with worker_id
+// Agent process uses SDK Client
 agent := core.NewBaseAgent(&core.BaseAgentConfig{
     Name:    "my-agent",
     Version: "1.0.0",
@@ -84,9 +93,9 @@ agent.AddProvider(providers.GitHub())
 agent.Start(ctx)
 ```
 
-**Agent modes:**
-- **Daemon**: Long-running, polls for commands
-- **One-shot**: Single scan and exit (CI/CD)
+**Agent execution modes:**
+- **One-shot**: Single scan and exit (CI/CD) - for `runner` type
+- **Daemon**: Long-running, polls for commands - for `worker`, `collector`, `sensor` types
 - **Server-controlled**: Receives commands via heartbeat stream
 
 ### 3. Components
@@ -124,7 +133,7 @@ Components are the building blocks that perform actual work:
                                                   ▼
                                           ┌──────────────┐
                                           │  SDK Client  │
-                                          │ (worker_id)  │
+                                          │ (agent_id)  │
                                           └──────┬───────┘
                                                   │
                                       PushFindings() / PushAssets()
@@ -237,7 +246,7 @@ func (p *MyProvider) ListCollectors() []core.Collector {
 
 ## Best Practices
 
-1. **Always use Worker ID**: Ensure every SDK client has a unique `worker_id` for traceability.
+1. **Always use Agent ID**: Ensure every SDK client has a unique `agent_id` for traceability.
 
 2. **Rate limiting**: Use `BaseConnector` for external APIs to avoid rate limit errors.
 

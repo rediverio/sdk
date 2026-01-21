@@ -29,9 +29,11 @@ service IngestService {
 // =============================================================================
 
 message PushFindingsRequest {
-  string worker_id = 1;
+  reserved 1;                     // Previously worker_id
+  reserved "worker_id";
   ReportMetadata metadata = 2;
   repeated Finding findings = 3;
+  string agent_id = 4;            // Agent identification
 }
 
 message ReportMetadata {
@@ -137,8 +139,10 @@ message PushFindingsResponse {
 // =============================================================================
 
 message PushAssetsRequest {
-  string worker_id = 1;
+  reserved 1;                     // Previously worker_id
+  reserved "worker_id";
   repeated Asset assets = 2;
+  string agent_id = 3;            // Agent identification
 }
 
 message Asset {
@@ -175,8 +179,10 @@ message PushAssetsResponse {
 // =============================================================================
 
 message PushExposuresRequest {
-  string worker_id = 1;
+  reserved 1;                     // Previously worker_id
+  reserved "worker_id";
   repeated ExposureEvent events = 2;
+  string agent_id = 3;            // Agent identification
 }
 
 message ExposureEvent {

@@ -23,7 +23,7 @@ func main() {
 	// Parse command line flags
 	baseURL := flag.String("url", "http://localhost:8080", "Rediver API base URL")
 	apiKey := flag.String("api-key", "", "API key for authentication")
-	workerID := flag.String("worker-id", "", "Worker ID (optional)")
+	agentID := flag.String("agent-id", "", "Agent ID (optional)")
 	verbose := flag.Bool("verbose", true, "Enable verbose output")
 	flag.Parse()
 
@@ -40,7 +40,7 @@ func main() {
 	cfg := &client.Config{
 		BaseURL:    *baseURL,
 		APIKey:     *apiKey,
-		WorkerID:   *workerID,
+		AgentID:    *agentID,
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
 		RetryDelay: 2 * time.Second,
