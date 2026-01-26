@@ -230,7 +230,73 @@ func main() {
 }
 ```
 
-### 6b. Using Functional Options (AWS SDK style)
+### 6b. Platform Agent Mode
+
+Run as a platform agent with lease-based heartbeat and job polling:
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/rediverio/sdk/pkg/platform"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Create platform agent client
+    agent := platform.NewAgentClient(&platform.Config{
+        BaseURL:          "https://api.rediver.io",
+        BootstrapToken:   os.Getenv("BOOTSTRAP_TOKEN"), // For initial registration
+        AgentID:          os.Getenv("AGENT_ID"),        // After registration
+        AgentSecret:      os.Getenv("AGENT_SECRET"),    // After registration
+        Region:           "ap-southeast-1",
+        HeartbeatInterval: 30 * time.Second,
+        LeaseDuration:     60, // seconds
+    })
+
+    // Register agent (only needed once)
+    if agent.AgentID == "" {
+        registration, err := agent.Register(ctx, &platform.RegisterRequest{
+            Name:         "scanner-01",
+            Region:       "ap-southeast-1",
+            Capabilities: []string{"sast", "sca", "secret"},
+            Tools:        []string{"semgrep", "trivy", "gitleaks"},
+            MaxJobs:      5,
+        })
+        if err != nil {
+            log.Fatal(err)
+        }
+        // Save registration.AgentID and registration.AgentSecret for next startup
+    }
+
+    // Start heartbeat goroutine
+    go agent.StartHeartbeat(ctx)
+
+    // Poll for jobs (long-poll)
+    for {
+        job, err := agent.PollForJob(ctx)
+        if err != nil {
+            log.Printf("Poll error: %v", err)
+            continue
+        }
+
+        if job != nil {
+            // Execute the job
+            result := executeJob(job)
+
+            // Report completion
+            err = agent.CompleteJob(ctx, job.ID, result)
+            if err != nil {
+                log.Printf("Complete error: %v", err)
+            }
+        }
+    }
+}
+```
+
+### 6c. Using Functional Options (AWS SDK style)
 
 ```go
 package main
@@ -486,6 +552,11 @@ sdk/
 │   ├── core/               # Core interfaces and base implementations
 │   ├── ris/                # RIS (Rediver Ingest Schema) types
 │   ├── client/             # Rediver API client (HTTP + functional options)
+│   ├── platform/           # Platform agent client
+│   │   ├── client.go       # Platform agent API client
+│   │   ├── lease.go        # Lease renewal (heartbeat)
+│   │   ├── job.go          # Job polling and completion
+│   │   └── register.go     # Agent registration
 │   ├── scanners/           # Native scanner implementations
 │   │   ├── semgrep/        # Semgrep SAST scanner
 │   │   ├── gitleaks/       # Gitleaks secret scanner
