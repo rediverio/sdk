@@ -360,7 +360,60 @@ func handleError(err error) {
 }
 ```
 
-### 6d. Using GitHub Provider
+### 6d. Workflow-Triggered Jobs (Platform Agents)
+
+Platform agents can receive jobs triggered by the Workflow Executor as part of automation workflows:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "github.com/rediverio/sdk/pkg/platform"
+)
+
+func executeJob(job *platform.JobInfo) *platform.JobResult {
+    result := &platform.JobResult{
+        JobID: job.ID,
+    }
+
+    // Check if this job was triggered by a workflow
+    if job.HasWorkflowContext() {
+        log.Printf("Job triggered by workflow: %s (run: %s)",
+            job.WorkflowContext.WorkflowID,
+            job.WorkflowContext.WorkflowRunID,
+        )
+        log.Printf("Action node: %s (%s)",
+            job.WorkflowContext.ActionNodeKey,
+            job.WorkflowContext.ActionNodeID,
+        )
+
+        // Echo back workflow context for correlation
+        result.WorkflowContext = job.WorkflowContext
+    }
+
+    // Execute the scan...
+    // result.FindingsCount = ...
+    // result.Status = "completed"
+
+    return result
+}
+```
+
+The `WorkflowContext` contains:
+- `WorkflowID`: UUID of the workflow definition
+- `WorkflowRunID`: UUID of the specific workflow execution
+- `TriggerType`: What triggered the workflow (e.g., "finding_created", "schedule", "manual")
+- `ActionNodeID`: UUID of the action node that triggered this job
+- `ActionNodeKey`: The node key (e.g., "run_scan_1")
+
+This allows agents to:
+- Log workflow context for debugging
+- Track job execution as part of workflow runs
+- Correlate findings with workflow triggers
+
+### 6e. Using GitHub Provider
 
 ```go
 package main
