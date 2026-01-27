@@ -2,8 +2,12 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -45,11 +49,22 @@ type GetCommandsResponse struct {
 
 // ScanCommandPayload is the payload for scan commands.
 type ScanCommandPayload struct {
-	Scanner        string                 `json:"scanner"`
-	Target         string                 `json:"target"`
-	Config         map[string]interface{} `json:"config,omitempty"`
-	TimeoutSeconds int                    `json:"timeout_seconds,omitempty"`
-	ReportProgress bool                   `json:"report_progress,omitempty"`
+	Scanner         string                 `json:"scanner"`
+	Target          string                 `json:"target"`
+	Config          map[string]interface{} `json:"config,omitempty"`
+	TimeoutSeconds  int                    `json:"timeout_seconds,omitempty"`
+	ReportProgress  bool                   `json:"report_progress,omitempty"`
+	CustomTemplates []EmbeddedTemplate     `json:"custom_templates,omitempty"`
+}
+
+// EmbeddedTemplate is a custom template embedded in scan command payload.
+// Templates are sent from the platform and written to temp dir before scan.
+type EmbeddedTemplate struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	TemplateType string `json:"template_type"` // nuclei, semgrep, gitleaks
+	Content      string `json:"content"`       // Base64-encoded template content (YAML/TOML)
+	ContentHash  string `json:"content_hash"`  // SHA256 hash of decoded content for verification
 }
 
 // CollectCommandPayload is the payload for collect commands.
@@ -367,6 +382,25 @@ func (e *DefaultCommandExecutor) executeScan(ctx context.Context, cmd *Command) 
 		}
 	}
 
+	// Handle custom templates if provided
+	var templateDir string
+	var cleanupTemplates func()
+	if len(payload.CustomTemplates) > 0 {
+		var err error
+		templateDir, cleanupTemplates, err = e.writeCustomTemplates(payload.Scanner, payload.CustomTemplates)
+		if err != nil {
+			return nil, fmt.Errorf("write custom templates: %w", err)
+		}
+		if cleanupTemplates != nil {
+			defer cleanupTemplates()
+		}
+		// Set template dir in options for scanner to use
+		opts.CustomTemplateDir = templateDir
+		if e.verbose {
+			fmt.Printf("[executor] Using custom templates from %s\n", templateDir)
+		}
+	}
+
 	// Create context with timeout if specified
 	if payload.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
@@ -411,6 +445,58 @@ func (e *DefaultCommandExecutor) executeScan(ctx context.Context, cmd *Command) 
 	}
 
 	return result, nil
+}
+
+// writeCustomTemplates writes embedded templates to a temp directory.
+// Returns the temp directory path and a cleanup function.
+func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templates []EmbeddedTemplate) (string, func(), error) {
+	// Create temp directory for templates
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("rediver-templates-%s-*", scannerName))
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp dir: %w", err)
+	}
+
+	cleanup := func() {
+		os.RemoveAll(tmpDir)
+	}
+
+	// Write each template to the temp directory
+	for _, tpl := range templates {
+		// Verify content hash if provided
+		if tpl.ContentHash != "" {
+			hash := sha256.Sum256([]byte(tpl.Content))
+			computedHash := hex.EncodeToString(hash[:])
+			if computedHash != tpl.ContentHash {
+				cleanup()
+				return "", nil, fmt.Errorf("template %s hash mismatch: expected %s, got %s", tpl.Name, tpl.ContentHash, computedHash)
+			}
+		}
+
+		// Determine file extension based on template type
+		ext := ".yaml"
+		if tpl.TemplateType == "gitleaks" {
+			ext = ".toml"
+		}
+
+		// Use template name as filename, ensure it has correct extension
+		filename := tpl.Name
+		if filepath.Ext(filename) == "" {
+			filename += ext
+		}
+
+		// Write template content to file
+		filePath := filepath.Join(tmpDir, filename)
+		if err := os.WriteFile(filePath, []byte(tpl.Content), 0600); err != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("write template %s: %w", tpl.Name, err)
+		}
+
+		if e.verbose {
+			fmt.Printf("[executor] Wrote custom template: %s\n", filePath)
+		}
+	}
+
+	return tmpDir, cleanup, nil
 }
 
 func (e *DefaultCommandExecutor) executeCollect(ctx context.Context, cmd *Command) (*CommandExecutionResult, error) {

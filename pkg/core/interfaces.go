@@ -43,6 +43,10 @@ type ScanOptions struct {
 	ExtraArgs  []string          `yaml:"extra_args" json:"extra_args"`
 	Env        map[string]string `yaml:"env" json:"env"`
 
+	// Custom templates directory (written from embedded templates)
+	// Used by Nuclei (-t), Semgrep (--config), Gitleaks (--config)
+	CustomTemplateDir string `yaml:"custom_template_dir" json:"custom_template_dir"`
+
 	// Asset information for linking findings
 	RepoURL   string `yaml:"repo_url" json:"repo_url"`
 	Branch    string `yaml:"branch" json:"branch"`
