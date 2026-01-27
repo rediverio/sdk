@@ -249,12 +249,23 @@ func (s *Scanner) buildArgs(target, outputFile string, opts *core.ScanOptions) [
 		args = append(args, "--dataflow-traces")
 	}
 
-	// Configs
+	// Custom templates from ScanOptions take priority (platform-provided templates)
+	// For Semgrep, custom templates are YAML rule files passed via --config
+	if opts != nil && opts.CustomTemplateDir != "" {
+		args = append(args, "--config", opts.CustomTemplateDir)
+	}
+
+	// Configs (scanner-level defaults)
 	configs := s.Configs
 	if opts != nil && opts.ConfigFile != "" {
 		configs = []string{opts.ConfigFile}
 	}
-	if len(configs) == 0 {
+	// If custom templates were provided, don't use default "auto" config
+	// but still use explicitly configured rules
+	if opts != nil && opts.CustomTemplateDir != "" && len(configs) == 1 && configs[0] == DefaultConfig {
+		configs = nil // Skip default "auto" when using custom templates
+	}
+	if len(configs) == 0 && (opts == nil || opts.CustomTemplateDir == "") {
 		configs = []string{DefaultConfig}
 	}
 	for _, config := range configs {

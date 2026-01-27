@@ -116,9 +116,25 @@ func (s *Scanner) GenericScan(ctx context.Context, target string, opts *core.Sca
 	// Convert generic options to secret options
 	var secretOpts *core.SecretScanOptions
 	if opts != nil {
+		// For gitleaks, CustomTemplateDir contains a single TOML config file
+		// Use it as ConfigFile if provided
+		configFile := opts.ConfigFile
+		if opts.CustomTemplateDir != "" {
+			// CustomTemplateDir points to a directory with TOML files
+			// Find the first .toml file in the directory
+			entries, err := os.ReadDir(opts.CustomTemplateDir)
+			if err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() && filepath.Ext(entry.Name()) == ".toml" {
+						configFile = filepath.Join(opts.CustomTemplateDir, entry.Name())
+						break
+					}
+				}
+			}
+		}
 		secretOpts = &core.SecretScanOptions{
 			TargetDir:  opts.TargetDir,
-			ConfigFile: opts.ConfigFile,
+			ConfigFile: configFile,
 			Exclude:    opts.Exclude,
 			Verbose:    opts.Verbose,
 		}

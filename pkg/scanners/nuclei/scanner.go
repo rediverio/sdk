@@ -362,7 +362,12 @@ func (s *Scanner) buildArgs(target string, opts *core.ScanOptions) []string {
 		args = append(args, "-o", s.OutputFile)
 	}
 
-	// Template configuration
+	// Custom templates from ScanOptions take priority (platform-provided templates)
+	if opts != nil && opts.CustomTemplateDir != "" {
+		args = append(args, "-t", opts.CustomTemplateDir)
+	}
+
+	// Template configuration (scanner-level defaults)
 	if len(s.Templates) > 0 {
 		for _, t := range s.Templates {
 			args = append(args, "-t", t)
