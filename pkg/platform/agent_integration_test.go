@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,10 +34,13 @@ func (m *mockJobExecutor) Execute(ctx context.Context, job *JobInfo) (*JobResult
 type mockPipelineUploader struct {
 	uploadFunc func(ctx context.Context, report *ris.Report) (*pipeline.Result, error)
 	uploads    int
+	mu         sync.Mutex
 }
 
 func (m *mockPipelineUploader) Upload(ctx context.Context, report *ris.Report) (*pipeline.Result, error) {
+	m.mu.Lock()
 	m.uploads++
+	m.mu.Unlock()
 	if m.uploadFunc != nil {
 		return m.uploadFunc(ctx, report)
 	}
@@ -44,6 +48,12 @@ func (m *mockPipelineUploader) Upload(ctx context.Context, report *ris.Report) (
 		Status:          "completed",
 		FindingsCreated: len(report.Findings),
 	}, nil
+}
+
+func (m *mockPipelineUploader) getUploads() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.uploads
 }
 
 // mockChunkUploader implements chunk.Uploader for testing
@@ -273,8 +283,8 @@ func TestPlatformAgent_SubmitReport(t *testing.T) {
 	// Wait for upload
 	time.Sleep(100 * time.Millisecond)
 
-	if pipelineUploader.uploads != 1 {
-		t.Errorf("Expected 1 upload, got %d", pipelineUploader.uploads)
+	if pipelineUploader.getUploads() != 1 {
+		t.Errorf("Expected 1 upload, got %d", pipelineUploader.getUploads())
 	}
 }
 

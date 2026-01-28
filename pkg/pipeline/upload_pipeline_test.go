@@ -177,20 +177,23 @@ func TestPipeline_Submit(t *testing.T) {
 
 func TestPipeline_SubmitWithOptions(t *testing.T) {
 	uploader := &mockUploader{}
+
+	var mu sync.Mutex
+	var submittedItem *QueueItem
+
 	p := NewPipeline(&PipelineConfig{
 		QueueSize: 10,
 		Workers:   2,
+		OnSubmitted: func(item *QueueItem) {
+			mu.Lock()
+			submittedItem = item
+			mu.Unlock()
+		},
 	}, uploader)
 
 	ctx := context.Background()
 	p.Start(ctx)
 	defer p.Stop(ctx)
-
-	var submittedItem *QueueItem
-
-	p.config.OnSubmitted = func(item *QueueItem) {
-		submittedItem = item
-	}
 
 	report := &ris.Report{
 		Tool: &ris.Tool{Name: "test-tool"},
@@ -206,6 +209,9 @@ func TestPipeline_SubmitWithOptions(t *testing.T) {
 	}
 
 	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
 
 	if submittedItem == nil {
 		t.Fatal("OnSubmitted not called")
@@ -243,9 +249,14 @@ func TestPipeline_QueueFull(t *testing.T) {
 	}()
 
 	// Submit until queue is full
+	// Queue size = 2, Workers = 1
+	// First submit: goes to worker (processing)
+	// Second submit: goes to queue slot 1
+	// Third submit: goes to queue slot 2
+	// Fourth submit: queue full, should fail
 	for i := 0; i < 5; i++ {
 		_, err := p.Submit(&ris.Report{})
-		if i >= 2 && err == nil {
+		if i >= 3 && err == nil {
 			t.Errorf("Submit %d should fail when queue is full", i)
 		}
 	}
@@ -301,6 +312,7 @@ func TestPipeline_Retry(t *testing.T) {
 		},
 	}
 
+	var mu sync.Mutex
 	var completedItem *QueueItem
 	var completedResult *Result
 
@@ -310,8 +322,10 @@ func TestPipeline_Retry(t *testing.T) {
 		RetryAttempts: 3,
 		RetryDelay:    10 * time.Millisecond,
 		OnCompleted: func(item *QueueItem, result *Result) {
+			mu.Lock()
 			completedItem = item
 			completedResult = result
+			mu.Unlock()
 		},
 	}, uploader)
 
@@ -328,6 +342,8 @@ func TestPipeline_Retry(t *testing.T) {
 		t.Errorf("Expected at least 3 attempts, got %d", attempts)
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
 	if completedItem == nil {
 		t.Error("OnCompleted should have been called")
 	}
@@ -343,6 +359,7 @@ func TestPipeline_RetryExhausted(t *testing.T) {
 		},
 	}
 
+	var mu sync.Mutex
 	var failedItem *QueueItem
 	var failedErr error
 
@@ -352,8 +369,10 @@ func TestPipeline_RetryExhausted(t *testing.T) {
 		RetryAttempts: 2,
 		RetryDelay:    10 * time.Millisecond,
 		OnFailed: func(item *QueueItem, err error) {
+			mu.Lock()
 			failedItem = item
 			failedErr = err
+			mu.Unlock()
 		},
 	}, uploader)
 
@@ -366,12 +385,14 @@ func TestPipeline_RetryExhausted(t *testing.T) {
 	// Wait for retries
 	time.Sleep(500 * time.Millisecond)
 
+	mu.Lock()
 	if failedItem == nil {
 		t.Error("OnFailed should have been called")
 	}
 	if failedErr == nil {
 		t.Error("failedErr should not be nil")
 	}
+	mu.Unlock()
 
 	stats := p.GetStats()
 	if stats.Failed != 1 {
@@ -447,6 +468,7 @@ func TestPipeline_QueueLength(t *testing.T) {
 func TestPipeline_Callbacks(t *testing.T) {
 	uploader := &mockUploader{}
 
+	var mu sync.Mutex
 	var submittedCalled, completedCalled bool
 	var submittedItem, completedItem *QueueItem
 
@@ -454,12 +476,16 @@ func TestPipeline_Callbacks(t *testing.T) {
 		QueueSize: 10,
 		Workers:   1,
 		OnSubmitted: func(item *QueueItem) {
+			mu.Lock()
 			submittedCalled = true
 			submittedItem = item
+			mu.Unlock()
 		},
 		OnCompleted: func(item *QueueItem, result *Result) {
+			mu.Lock()
 			completedCalled = true
 			completedItem = item
+			mu.Unlock()
 		},
 	}, uploader)
 
@@ -470,6 +496,9 @@ func TestPipeline_Callbacks(t *testing.T) {
 	p.Submit(&ris.Report{Tool: &ris.Tool{Name: "test"}})
 
 	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
 
 	if !submittedCalled {
 		t.Error("OnSubmitted should have been called")

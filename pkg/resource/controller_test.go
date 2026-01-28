@@ -365,6 +365,7 @@ func TestController_ForceGC(t *testing.T) {
 }
 
 func TestController_ThresholdCallbacks(t *testing.T) {
+	var mu sync.Mutex
 	var exceededCalled, clearedCalled bool
 
 	c := NewController(&ControllerConfig{
@@ -373,10 +374,14 @@ func TestController_ThresholdCallbacks(t *testing.T) {
 		SampleInterval:   50 * time.Millisecond,
 		CooldownDuration: 100 * time.Millisecond,
 		OnThresholdExceeded: func(metrics *SystemMetrics, reason string) {
+			mu.Lock()
 			exceededCalled = true
+			mu.Unlock()
 		},
 		OnThresholdCleared: func(metrics *SystemMetrics) {
+			mu.Lock()
 			clearedCalled = true
+			mu.Unlock()
 		},
 	})
 
@@ -390,5 +395,7 @@ func TestController_ThresholdCallbacks(t *testing.T) {
 
 	// With low thresholds, exceeded should have been called
 	// (may be flaky depending on system load)
+	mu.Lock()
 	t.Logf("ExceededCalled=%v, ClearedCalled=%v", exceededCalled, clearedCalled)
+	mu.Unlock()
 }
