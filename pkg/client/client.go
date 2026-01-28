@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -1401,6 +1402,137 @@ func (c *Client) UploadChunk(ctx context.Context, data *chunk.ChunkData) error {
 func (c *Client) AsChunkUploader() chunk.Uploader {
 	return c
 }
+
+// =============================================================================
+// Suppression API
+// =============================================================================
+
+// SuppressionRule represents a platform-controlled suppression rule.
+type SuppressionRule struct {
+	RuleID      string  `json:"rule_id,omitempty"`
+	ToolName    string  `json:"tool_name,omitempty"`
+	PathPattern string  `json:"path_pattern,omitempty"`
+	AssetID     *string `json:"asset_id,omitempty"`
+	ExpiresAt   *string `json:"expires_at,omitempty"`
+}
+
+// GetSuppressions fetches active suppression rules from the platform.
+// These rules are used to filter out false positives from scan results.
+func (c *Client) GetSuppressions(ctx context.Context) ([]SuppressionRule, error) {
+	url := fmt.Sprintf("%s/api/v1/suppressions/active", c.baseURL)
+
+	if c.verbose {
+		fmt.Println("[rediver] Fetching suppression rules")
+	}
+
+	data, err := c.doRequest(ctx, "GET", url, nil)
+	if err != nil {
+		// Non-fatal: suppressions are optional
+		if c.verbose {
+			fmt.Printf("[rediver] Warning: could not fetch suppressions: %v\n", err)
+		}
+		return nil, nil
+	}
+
+	var resp struct {
+		Rules []SuppressionRule `json:"rules"`
+		Count int               `json:"count"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal suppressions response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[rediver] Fetched %d suppression rules\n", resp.Count)
+	}
+
+	return resp.Rules, nil
+}
+
+// FilterSuppressedFindings removes findings that match suppression rules.
+// This is used by the security gate to exclude false positives.
+func (c *Client) FilterSuppressedFindings(findings []ris.Finding, rules []SuppressionRule) []ris.Finding {
+	if len(rules) == 0 {
+		return findings
+	}
+
+	var filtered []ris.Finding
+	for _, f := range findings {
+		if !c.isFiningSuppressed(f, rules) {
+			filtered = append(filtered, f)
+		}
+	}
+
+	return filtered
+}
+
+// isFiningSuppressed checks if a finding matches any suppression rule.
+func (c *Client) isFiningSuppressed(f ris.Finding, rules []SuppressionRule) bool {
+	for _, rule := range rules {
+		if c.matchesSuppressionRule(f, rule) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesSuppressionRule checks if a finding matches a specific suppression rule.
+// Note: ToolName is not checked here because Finding doesn't have Tool info;
+// it should be checked at the Report level before calling this function.
+func (c *Client) matchesSuppressionRule(f ris.Finding, rule SuppressionRule) bool {
+	// Check rule ID (supports wildcard suffix)
+	if rule.RuleID != "" {
+		if strings.HasSuffix(rule.RuleID, "*") {
+			prefix := strings.TrimSuffix(rule.RuleID, "*")
+			if !strings.HasPrefix(f.RuleID, prefix) {
+				return false
+			}
+		} else if rule.RuleID != f.RuleID {
+			return false
+		}
+	}
+
+	// Check path pattern
+	if rule.PathPattern != "" && f.Location != nil && f.Location.Path != "" {
+		if !matchGlobPattern(rule.PathPattern, f.Location.Path) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// matchGlobPattern provides simple glob matching with ** support.
+func matchGlobPattern(pattern, path string) bool {
+	// Handle ** patterns
+	if strings.Contains(pattern, "**") {
+		parts := strings.Split(pattern, "**")
+		if len(parts) == 2 {
+			prefix := strings.TrimSuffix(parts[0], "/")
+			suffix := strings.TrimPrefix(parts[1], "/")
+
+			if prefix != "" && !strings.HasPrefix(path, prefix) {
+				return false
+			}
+			if suffix != "" && !strings.HasSuffix(path, suffix) {
+				return false
+			}
+			return true
+		}
+	}
+
+	// Simple wildcard matching
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(path, prefix)
+	}
+
+	return pattern == path
+}
+
+// =============================================================================
+// Finding Enrichment API
+// =============================================================================
 
 // EnrichFindings adds EPSS and KEV data to findings with CVE IDs.
 func (c *Client) EnrichFindings(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error) {
