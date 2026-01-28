@@ -274,6 +274,126 @@ func TestGenerateGeneric(t *testing.T) {
 	}
 }
 
+func TestGenerate_DAST(t *testing.T) {
+	input := Input{
+		Type:       TypeDAST,
+		RuleID:     "CVE-2021-44228-log4j",
+		TargetHost: "https://example.com:443",
+		TargetPath: "/api/users?id=1",
+		Parameter:  "id",
+	}
+
+	fingerprint := Generate(input)
+
+	// Should be 64 hex characters
+	if len(fingerprint) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fingerprint))
+	}
+
+	// Same input should produce same fingerprint
+	fingerprint2 := Generate(input)
+	if fingerprint != fingerprint2 {
+		t.Errorf("Same input produced different fingerprints")
+	}
+
+	// Different parameter should produce different fingerprint
+	input.Parameter = "name"
+	fingerprint3 := Generate(input)
+	if fingerprint == fingerprint3 {
+		t.Errorf("Different parameter should produce different fingerprint")
+	}
+}
+
+func TestGenerate_Container(t *testing.T) {
+	input := Input{
+		Type:            TypeContainer,
+		ImageTarget:     "nginx:1.21",
+		PackageName:     "openssl",
+		PackageVersion:  "1.1.1k-r0",
+		VulnerabilityID: "CVE-2021-3711",
+	}
+
+	fingerprint := Generate(input)
+
+	// Should be 64 hex characters
+	if len(fingerprint) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fingerprint))
+	}
+
+	// Different image should produce different fingerprint
+	input.ImageTarget = "nginx:1.22"
+	fingerprint2 := Generate(input)
+	if fingerprint == fingerprint2 {
+		t.Errorf("Different image should produce different fingerprint")
+	}
+}
+
+func TestGenerate_Web3(t *testing.T) {
+	input := Input{
+		Type:              TypeWeb3,
+		ContractAddress:   "0x1234567890abcdef1234567890abcdef12345678",
+		ChainID:           1, // Ethereum mainnet
+		SWCID:             "SWC-107",
+		FunctionSignature: "transfer(address,uint256)",
+	}
+
+	fingerprint := Generate(input)
+
+	// Should be 64 hex characters
+	if len(fingerprint) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fingerprint))
+	}
+
+	// Different chain should produce different fingerprint
+	input.ChainID = 56 // BSC
+	fingerprint2 := Generate(input)
+	if fingerprint == fingerprint2 {
+		t.Errorf("Different chain should produce different fingerprint")
+	}
+}
+
+func TestGenerateDAST(t *testing.T) {
+	fp := GenerateDAST("nuclei-cve-2021-44228", "example.com", "/api/users", "id")
+
+	if len(fp) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fp))
+	}
+
+	// Should be deterministic
+	fp2 := GenerateDAST("nuclei-cve-2021-44228", "example.com", "/api/users", "id")
+	if fp != fp2 {
+		t.Errorf("GenerateDAST is not deterministic")
+	}
+}
+
+func TestGenerateContainer(t *testing.T) {
+	fp := GenerateContainer("redis:7.0", "openssl", "3.0.2", "CVE-2022-3602")
+
+	if len(fp) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fp))
+	}
+
+	// Should be deterministic
+	fp2 := GenerateContainer("redis:7.0", "openssl", "3.0.2", "CVE-2022-3602")
+	if fp != fp2 {
+		t.Errorf("GenerateContainer is not deterministic")
+	}
+}
+
+func TestGenerateWeb3(t *testing.T) {
+	fp := GenerateWeb3("0x1234567890abcdef1234567890abcdef12345678", 1, "SWC-101", "withdraw()")
+
+	if len(fp) != 64 {
+		t.Errorf("Fingerprint length = %d, want 64", len(fp))
+	}
+
+	// Should be deterministic
+	fp2 := GenerateWeb3("0x1234567890abcdef1234567890abcdef12345678", 1, "SWC-101", "withdraw()")
+	if fp != fp2 {
+		t.Errorf("GenerateWeb3 is not deterministic")
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -291,6 +411,75 @@ func TestNormalize(t *testing.T) {
 			got := normalize(tt.input)
 			if got != tt.expected {
 				t.Errorf("normalize(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeHost(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"https://example.com:443", "example.com"},
+		{"http://example.com:80", "example.com"},
+		{"https://example.com", "example.com"},
+		{"http://example.com/", "example.com"},
+		{"EXAMPLE.COM", "example.com"},
+		{"api.example.com:8080", "api.example.com:8080"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizeHost(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizeHost(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizePath(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"/api/users?id=1", "/api/users"},
+		{"/api/users#section", "/api/users"},
+		{"api/users", "/api/users"},
+		{"/api/users/", "/api/users"},
+		{"/", "/"},
+		{"", ""},
+		{"/API/USERS", "/api/users"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizePath(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizePath(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeAddress(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"0x1234567890ABCDEF1234567890abcdef12345678", "0x1234567890abcdef1234567890abcdef12345678"},
+		{"1234567890abcdef1234567890abcdef12345678", "0x1234567890abcdef1234567890abcdef12345678"},
+		{"0xABCD", "0xabcd"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizeAddress(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizeAddress(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -322,6 +511,26 @@ func TestDetectType(t *testing.T) {
 		input    Input
 		expected Type
 	}{
+		{
+			"Web3 detection - contract address",
+			Input{ContractAddress: "0x1234567890abcdef"},
+			TypeWeb3,
+		},
+		{
+			"Web3 detection - SWC ID",
+			Input{SWCID: "SWC-101"},
+			TypeWeb3,
+		},
+		{
+			"Container detection",
+			Input{ImageTarget: "nginx:latest", PackageName: "openssl"},
+			TypeContainer,
+		},
+		{
+			"DAST detection",
+			Input{TargetHost: "example.com"},
+			TypeDAST,
+		},
 		{
 			"SCA detection",
 			Input{PackageName: "lodash", VulnerabilityID: "CVE-2021-1234"},
@@ -450,6 +659,27 @@ func BenchmarkGenerateSecret(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		GenerateSecret(".env", "aws-key", 5, "AKIAIOSFODNN7EXAMPLE")
+	}
+}
+
+func BenchmarkGenerateDAST(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		GenerateDAST("nuclei-cve-2021-44228", "example.com", "/api/users", "id")
+	}
+}
+
+func BenchmarkGenerateContainer(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		GenerateContainer("nginx:1.21", "openssl", "1.1.1k-r0", "CVE-2021-3711")
+	}
+}
+
+func BenchmarkGenerateWeb3(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		GenerateWeb3("0x1234567890abcdef1234567890abcdef12345678", 1, "SWC-101", "withdraw()")
 	}
 }
 
