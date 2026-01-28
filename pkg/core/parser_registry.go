@@ -117,6 +117,7 @@ func (p *SARIFParser) Parse(ctx context.Context, data []byte, opts *ParseOptions
 		AssetID:           opts.AssetID,
 		Branch:            opts.Branch,
 		CommitSHA:         opts.CommitSHA,
+		BranchInfo:        opts.BranchInfo,
 		DefaultConfidence: opts.DefaultConfidence,
 		ToolType:          opts.ToolType,
 	}

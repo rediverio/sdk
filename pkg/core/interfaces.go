@@ -296,9 +296,13 @@ type ParseOptions struct {
 	AssetValue string        `json:"asset_value"`
 	AssetID    string        `json:"asset_id"`
 
-	// Git information
+	// Git information (legacy - use BranchInfo for full context)
 	Branch    string `json:"branch"`
 	CommitSHA string `json:"commit_sha"`
+
+	// Branch information for branch-aware finding lifecycle
+	// Provides full CI/CD context for auto-resolve and expiry features
+	BranchInfo *ris.BranchInfo `json:"branch_info,omitempty"`
 
 	// Defaults
 	DefaultConfidence int `json:"default_confidence"`

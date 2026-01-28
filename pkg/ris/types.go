@@ -49,11 +49,47 @@ type ReportMetadata struct {
 	// External reference (job ID, scan ID)
 	SourceRef string `json:"source_ref,omitempty"`
 
+	// Coverage type: full, incremental, partial
+	// - full: Complete scan of entire scope (enables auto-resolve)
+	// - incremental: Diff scan of changed files only (no auto-resolve)
+	// - partial: Partial scan of specific directories (no auto-resolve)
+	CoverageType string `json:"coverage_type,omitempty"`
+
+	// Branch information for git-based scans
+	// Used for branch-aware finding lifecycle management
+	Branch *BranchInfo `json:"branch,omitempty"`
+
 	// Target scope of the scan/collection
 	Scope *Scope `json:"scope,omitempty"`
 
 	// Custom properties
 	Properties Properties `json:"properties,omitempty"`
+}
+
+// BranchInfo contains git branch context for CI/CD scans.
+// Used for branch-aware finding lifecycle management (auto-resolve, expiry).
+type BranchInfo struct {
+	// Branch name (e.g., "main", "feature/xyz", "refs/heads/main")
+	Name string `json:"name"`
+
+	// Whether this is the default branch (main/master)
+	// Auto-resolve only applies to default branch scans
+	IsDefaultBranch bool `json:"is_default_branch"`
+
+	// Commit SHA being scanned
+	CommitSHA string `json:"commit_sha,omitempty"`
+
+	// Base branch for PR/MR scans (e.g., "main" when scanning a PR targeting main)
+	BaseBranch string `json:"base_branch,omitempty"`
+
+	// PR/MR number if this is a pull request scan
+	PullRequestNumber int `json:"pull_request_number,omitempty"`
+
+	// PR/MR URL if this is a pull request scan
+	PullRequestURL string `json:"pull_request_url,omitempty"`
+
+	// Repository URL for context
+	RepositoryURL string `json:"repository_url,omitempty"`
 }
 
 // Scope defines the target scope of the scan/collection.

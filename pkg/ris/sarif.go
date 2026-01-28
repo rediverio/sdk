@@ -127,9 +127,13 @@ type ConvertOptions struct {
 	AssetValue string
 	AssetID    string
 
-	// Branch/commit info
+	// Branch/commit info (legacy - use BranchInfo for full context)
 	Branch    string
 	CommitSHA string
+
+	// Branch information for branch-aware finding lifecycle
+	// Provides full CI/CD context for auto-resolve and expiry features
+	BranchInfo *BranchInfo
 
 	// Default confidence
 	DefaultConfidence int
@@ -187,6 +191,17 @@ func FromSARIF(data []byte, opts *ConvertOptions) (*Report, error) {
 			Value:       opts.AssetValue,
 			Criticality: CriticalityHigh,
 		})
+	}
+
+	// Set branch info for branch-aware finding lifecycle
+	if opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts.Branch != "" {
+		// Fallback: create minimal BranchInfo from legacy fields
+		report.Metadata.Branch = &BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
 	}
 
 	// Build rule lookup
