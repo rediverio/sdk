@@ -921,8 +921,20 @@ type Finding struct {
 	// Confidence score 0-100
 	Confidence int `json:"confidence,omitempty"`
 
+	// Impact level: critical, high, medium, low (for risk assessment)
+	Impact string `json:"impact,omitempty"`
+
+	// Likelihood level: high, medium, low (for risk assessment)
+	Likelihood string `json:"likelihood,omitempty"`
+
 	// Finding category/class
 	Category string `json:"category,omitempty"`
+
+	// Vulnerability class(es): SQL Injection, XSS, Command Injection, etc.
+	VulnerabilityClass []string `json:"vulnerability_class,omitempty"`
+
+	// Subcategory: audit, vuln, secure default, etc.
+	Subcategory []string `json:"subcategory,omitempty"`
 
 	// Rule/check ID that detected this finding
 	RuleID string `json:"rule_id,omitempty"`
@@ -968,6 +980,41 @@ type Finding struct {
 
 	// Fingerprint for deduplication
 	Fingerprint string `json:"fingerprint,omitempty"`
+
+	// Partial fingerprints - contributing identity components (SARIF partialFingerprints)
+	PartialFingerprints map[string]string `json:"partial_fingerprints,omitempty"`
+
+	// Correlation ID - groups logically identical results across runs (SARIF correlationGuid)
+	CorrelationID string `json:"correlation_id,omitempty"`
+
+	// Baseline state - status relative to previous scan (SARIF baselineState)
+	// Values: new, unchanged, updated, absent
+	BaselineState string `json:"baseline_state,omitempty"`
+
+	// Kind - evaluation state of the finding (SARIF kind)
+	// Values: not_applicable, pass, fail, review, open, informational
+	Kind string `json:"kind,omitempty"`
+
+	// Rank - priority/importance score 0-100 (SARIF rank)
+	Rank float64 `json:"rank,omitempty"`
+
+	// Occurrence count - number of times this result was observed (SARIF occurrenceCount)
+	OccurrenceCount int `json:"occurrence_count,omitempty"`
+
+	// Related locations - additional locations related to this finding (SARIF relatedLocations)
+	RelatedLocations []*FindingLocation `json:"related_locations,omitempty"`
+
+	// Stacks - call stacks relevant to the finding (SARIF stacks)
+	Stacks []*StackTrace `json:"stacks,omitempty"`
+
+	// Attachments - relevant artifacts or evidence (SARIF attachments)
+	Attachments []*Attachment `json:"attachments,omitempty"`
+
+	// Work item URIs - URIs of associated issues/tickets (SARIF workItemUris)
+	WorkItemURIs []string `json:"work_item_uris,omitempty"`
+
+	// Hosted viewer URI - URI to view in hosted viewer (SARIF hostedViewerUri)
+	HostedViewerURI string `json:"hosted_viewer_uri,omitempty"`
 
 	// First seen timestamp
 	FirstSeenAt *time.Time `json:"first_seen_at,omitempty"`
@@ -1092,6 +1139,54 @@ type DataFlowLocation struct {
 	Index int `json:"index,omitempty"`
 }
 
+// StackTrace represents a call stack trace (SARIF stack).
+type StackTrace struct {
+	// Stack description/message
+	Message string `json:"message,omitempty"`
+
+	// Stack frames from innermost to outermost
+	Frames []*StackFrame `json:"frames,omitempty"`
+}
+
+// StackFrame represents a single frame in a call stack.
+type StackFrame struct {
+	// Location of this frame
+	Location *FindingLocation `json:"location,omitempty"`
+
+	// Module/library name
+	Module string `json:"module,omitempty"`
+
+	// Thread ID
+	ThreadID int `json:"thread_id,omitempty"`
+
+	// Function parameters
+	Parameters []string `json:"parameters,omitempty"`
+}
+
+// Attachment represents an artifact or evidence attachment (SARIF attachment).
+type Attachment struct {
+	// Description of the attachment
+	Description string `json:"description,omitempty"`
+
+	// Artifact location
+	ArtifactLocation *ArtifactLocation `json:"artifact_location,omitempty"`
+
+	// Relevant regions within the artifact
+	Regions []*FindingLocation `json:"regions,omitempty"`
+}
+
+// ArtifactLocation represents the location of an artifact.
+type ArtifactLocation struct {
+	// URI of the artifact
+	URI string `json:"uri,omitempty"`
+
+	// Base URI ID for resolution
+	URIBaseID string `json:"uri_base_id,omitempty"`
+
+	// Index within the artifacts array
+	Index int `json:"index,omitempty"`
+}
+
 // Suppression contains information about finding suppression.
 type Suppression struct {
 	// Suppression kind: in_source, external
@@ -1171,6 +1266,9 @@ type VulnerabilityDetails struct {
 
 	// CWE ID (single, for backward compatibility)
 	CWEID string `json:"cwe_id,omitempty"`
+
+	// OWASP IDs (e.g., "A01:2021", "A03:2021")
+	OWASPIDs []string `json:"owasp_ids,omitempty"`
 
 	// CVSS version (2.0, 3.0, 3.1, 4.0)
 	CVSSVersion string `json:"cvss_version,omitempty"`

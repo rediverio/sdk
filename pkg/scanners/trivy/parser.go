@@ -286,9 +286,14 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 		}
 	}
 
-	// Set message
-	if misconfig.Message != "" {
-		finding.Description = misconfig.Message
+	// Append message to description if both exist and are different
+	// Message contains the specific cause, while Description contains general explanation
+	if misconfig.Message != "" && misconfig.Message != misconfig.Description {
+		if finding.Description != "" {
+			finding.Description = finding.Description + "\n\nCause: " + misconfig.Message
+		} else {
+			finding.Description = misconfig.Message
+		}
 	}
 
 	// Set tags

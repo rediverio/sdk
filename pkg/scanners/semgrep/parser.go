@@ -84,14 +84,18 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 // convertResult converts a semgrep result to RIS finding.
 func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris.Finding {
 	finding := ris.Finding{
-		ID:         fmt.Sprintf("finding-%d", index+1),
-		Type:       ris.FindingTypeVulnerability,
-		Title:      fmt.Sprintf("%s at %s:%d", SlugToNormalText(r.CheckID), r.Path, r.Start.Line),
-		Severity:   ris.Severity(r.GetSeverity()),
-		Confidence: r.GetConfidence(),
-		Category:   r.GetCategory(),
-		RuleID:     r.CheckID,
-		RuleName:   SlugToNormalText(r.CheckID),
+		ID:                 fmt.Sprintf("finding-%d", index+1),
+		Type:               ris.FindingTypeVulnerability,
+		Title:              fmt.Sprintf("%s at %s:%d", SlugToNormalText(r.CheckID), r.Path, r.Start.Line),
+		Severity:           ris.Severity(r.GetSeverity()),
+		Confidence:         r.GetConfidence(),
+		Impact:             r.GetImpact(),
+		Likelihood:         r.GetLikelihood(),
+		Category:           r.GetCategory(),
+		VulnerabilityClass: r.GetVulnerabilityClass(),
+		Subcategory:        r.GetSubcategory(),
+		RuleID:             r.CheckID,
+		RuleName:           SlugToNormalText(r.CheckID),
 	}
 
 	// Description
@@ -124,11 +128,13 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 		}
 	}
 
-	// Vulnerability details (CWE, etc.)
+	// Vulnerability details (CWE, OWASP, etc.)
 	cwes := r.GetCWEs()
-	if len(cwes) > 0 {
+	owasps := r.GetOWASPs()
+	if len(cwes) > 0 || len(owasps) > 0 {
 		finding.Vulnerability = &ris.VulnerabilityDetails{
-			CWEIDs: cwes,
+			CWEIDs:   cwes,
+			OWASPIDs: owasps,
 		}
 		if len(cwes) > 0 {
 			finding.Vulnerability.CWEID = cwes[0]

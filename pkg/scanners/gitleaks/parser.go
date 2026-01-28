@@ -89,6 +89,8 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) r
 		Category:   "Hardcoded Secret",
 		RuleID:     f.RuleID,
 		RuleName:   f.Description,
+		// Description: detailed explanation of the secret type and its risks
+		Description: fmt.Sprintf("A %s was detected in the source code. Hardcoded secrets pose a significant security risk as they can be easily extracted from the codebase and used maliciously.", f.Description),
 	}
 
 	// Generate or use fingerprint

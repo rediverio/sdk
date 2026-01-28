@@ -69,8 +69,8 @@ type Metadata struct {
 	References []string `json:"references,omitempty"`
 
 	// CWE/OWASP
-	CWE   []string `json:"cwe,omitempty"`
-	OWASP []string `json:"owasp,omitempty"`
+	CWE   []string       `json:"cwe,omitempty"`
+	OWASP FlexStringList `json:"owasp,omitempty"`
 
 	// Semgrep specific
 	SemgrepDev SemgrepDevMeta `json:"semgrep.dev,omitempty"`
@@ -152,6 +152,32 @@ type Paths struct {
 type SkippedPath struct {
 	Path   string `json:"path"`
 	Reason string `json:"reason"`
+}
+
+// =============================================================================
+// Flexible Types
+// =============================================================================
+
+// FlexStringList handles JSON fields that can be either a string or []string.
+// Semgrep metadata is inconsistent: some rules have "owasp": "A01:2017" (string)
+// while others have "owasp": ["A01:2017", "A03:2021"] (array).
+type FlexStringList []string
+
+// UnmarshalJSON handles both string and []string JSON values.
+func (f *FlexStringList) UnmarshalJSON(data []byte) error {
+	// Try array first (most common)
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*f = arr
+		return nil
+	}
+	// Fall back to single string
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*f = []string{s}
+	return nil
 }
 
 // =============================================================================
@@ -333,6 +359,31 @@ func (r *Result) GetCategory() string {
 // GetCWEs returns CWE IDs from metadata.
 func (r *Result) GetCWEs() []string {
 	return r.Extra.Metadata.CWE
+}
+
+// GetOWASPs returns OWASP IDs from metadata (e.g., "A01:2021", "A03:2021").
+func (r *Result) GetOWASPs() []string {
+	return r.Extra.Metadata.OWASP
+}
+
+// GetImpact returns the impact level from metadata (HIGH, MEDIUM, LOW).
+func (r *Result) GetImpact() string {
+	return r.Extra.Metadata.Impact
+}
+
+// GetLikelihood returns the likelihood level from metadata (HIGH, MEDIUM, LOW).
+func (r *Result) GetLikelihood() string {
+	return r.Extra.Metadata.Likelihood
+}
+
+// GetVulnerabilityClass returns vulnerability classes (e.g., ["SQL Injection", "XSS"]).
+func (r *Result) GetVulnerabilityClass() []string {
+	return r.Extra.Metadata.VulnerabilityClass
+}
+
+// GetSubcategory returns subcategories (e.g., ["audit", "vuln"]).
+func (r *Result) GetSubcategory() []string {
+	return r.Extra.Metadata.Subcategory
 }
 
 // GetReferences returns reference URLs.
