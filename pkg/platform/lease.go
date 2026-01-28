@@ -3,6 +3,9 @@ package platform
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -65,7 +68,19 @@ type LeaseConfig struct {
 
 	// Verbose enables debug logging.
 	Verbose bool
+
+	// UseSecureIdentity enables cryptographically secure holder identity.
+	// When true, the holder identity includes a random nonce that cannot be guessed.
+	// Default: true (should only be false for testing).
+	UseSecureIdentity *bool
+
+	// IdentityPrefix is an optional prefix for the holder identity.
+	// Useful for identifying agent type (e.g., "scanner", "collector").
+	IdentityPrefix string
 }
+
+// identityNonceLength is the length of the random nonce in bytes.
+const identityNonceLength = 16
 
 // MetricsCollector collects system metrics.
 type MetricsCollector interface {
@@ -108,9 +123,8 @@ func NewLeaseManager(client LeaseClient, config *LeaseConfig) *LeaseManager {
 		config.MaxJobs = DefaultMaxConcurrentJobs
 	}
 
-	// Generate holder identity (hostname + PID)
-	hostname, _ := os.Hostname()
-	holderIdentity := fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	// Generate holder identity
+	holderIdentity := generateHolderIdentity(config)
 
 	return &LeaseManager{
 		client:         client,
@@ -118,6 +132,46 @@ func NewLeaseManager(client LeaseClient, config *LeaseConfig) *LeaseManager {
 		holderIdentity: holderIdentity,
 		stopCh:         make(chan struct{}),
 	}
+}
+
+// generateHolderIdentity creates a cryptographically secure holder identity.
+// SECURITY: The identity includes a random nonce to prevent lease hijacking.
+// Format: prefix-hostname-pid-nonce or prefix-hostname-pid (if secure identity disabled)
+func generateHolderIdentity(config *LeaseConfig) string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+
+	// Build base identity
+	prefix := config.IdentityPrefix
+	if prefix == "" {
+		prefix = "agent"
+	}
+
+	baseIdentity := fmt.Sprintf("%s-%s-%d", prefix, hostname, os.Getpid())
+
+	// Check if secure identity is enabled (default: true)
+	useSecure := true
+	if config.UseSecureIdentity != nil {
+		useSecure = *config.UseSecureIdentity
+	}
+
+	if !useSecure {
+		return baseIdentity
+	}
+
+	// Generate cryptographically secure nonce
+	nonce := make([]byte, identityNonceLength)
+	if _, err := rand.Read(nonce); err != nil {
+		// Fallback to time-based nonce if crypto/rand fails (very unlikely)
+		// This is still better than no nonce at all
+		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%d-%d", baseIdentity, time.Now().UnixNano(), os.Getpid())))
+		nonce = h[:identityNonceLength]
+	}
+
+	// Create identity with nonce
+	return fmt.Sprintf("%s-%s", baseIdentity, hex.EncodeToString(nonce))
 }
 
 // Start starts the lease renewal loop.

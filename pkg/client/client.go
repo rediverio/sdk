@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rediverio/sdk/pkg/chunk"
+	"github.com/rediverio/sdk/pkg/compress"
 	"github.com/rediverio/sdk/pkg/core"
 	"github.com/rediverio/sdk/pkg/retry"
 	"github.com/rediverio/sdk/pkg/ris"
@@ -29,6 +32,11 @@ type Client struct {
 	maxRetries int
 	retryDelay time.Duration
 	verbose    bool
+
+	// Compression configuration
+	compressor       *compress.Compressor
+	compressionLevel compress.Level
+	analyzer         *compress.Analyzer
 
 	// Retry queue (optional)
 	retryQueue  retry.RetryQueue
@@ -49,6 +57,11 @@ type Config struct {
 	RetryDelay time.Duration `yaml:"retry_delay" json:"retry_delay"`
 	Verbose    bool          `yaml:"verbose" json:"verbose"`
 
+	// Compression configuration
+	EnableCompression bool   `yaml:"enable_compression" json:"enable_compression"` // Enable request compression (default: true)
+	CompressionAlgo   string `yaml:"compression_algo" json:"compression_algo"`     // "zstd" or "gzip" (default: "zstd")
+	CompressionLevel  int    `yaml:"compression_level" json:"compression_level"`   // 1-9 (default: 3)
+
 	// Retry queue configuration (optional)
 	EnableRetryQueue bool          `yaml:"enable_retry_queue" json:"enable_retry_queue"`
 	RetryQueueDir    string        `yaml:"retry_queue_dir" json:"retry_queue_dir"`       // Default: ~/.rediver/retry-queue
@@ -60,9 +73,12 @@ type Config struct {
 // DefaultConfig returns default client config.
 func DefaultConfig() *Config {
 	return &Config{
-		Timeout:    30 * time.Second,
-		MaxRetries: 3,
-		RetryDelay: 2 * time.Second,
+		Timeout:           30 * time.Second,
+		MaxRetries:        3,
+		RetryDelay:        2 * time.Second,
+		EnableCompression: true,
+		CompressionAlgo:   "zstd",
+		CompressionLevel:  3,
 	}
 }
 
@@ -77,16 +93,35 @@ func New(cfg *Config) *Client {
 	if cfg.RetryDelay == 0 {
 		cfg.RetryDelay = 2 * time.Second
 	}
+
+	// Initialize compression if enabled
+	var compressor *compress.Compressor
+	var analyzer *compress.Analyzer
+	compressionLevel := compress.Level(cfg.CompressionLevel)
+	if compressionLevel == 0 {
+		compressionLevel = compress.LevelDefault
+	}
+
+	if cfg.EnableCompression {
+		algo := compress.AlgorithmZSTD
+		if cfg.CompressionAlgo == "gzip" {
+			algo = compress.AlgorithmGzip
+		}
+		compressor = compress.NewCompressor(algo, compressionLevel)
+		analyzer = compress.NewAnalyzer(nil)
+	}
+
 	return &Client{
-		baseURL:    cfg.BaseURL,
-		apiKey:     cfg.APIKey,
-		agentID:    cfg.AgentID,
-		maxRetries: cfg.MaxRetries,
-		retryDelay: cfg.RetryDelay,
-		httpClient: &http.Client{
-			Timeout: cfg.Timeout,
-		},
-		verbose: cfg.Verbose,
+		baseURL:          cfg.BaseURL,
+		apiKey:           cfg.APIKey,
+		agentID:          cfg.AgentID,
+		maxRetries:       cfg.MaxRetries,
+		retryDelay:       cfg.RetryDelay,
+		httpClient:       &http.Client{Timeout: cfg.Timeout},
+		verbose:          cfg.Verbose,
+		compressor:       compressor,
+		compressionLevel: compressionLevel,
+		analyzer:         analyzer,
 	}
 }
 
@@ -160,6 +195,32 @@ func WithRetry(maxRetries int, retryDelay time.Duration) Option {
 func WithVerbose(v bool) Option {
 	return func(c *Client) {
 		c.verbose = v
+	}
+}
+
+// WithCompression enables request compression with the specified algorithm.
+// Supported algorithms: "zstd" (recommended), "gzip"
+func WithCompression(algorithm string, level int) Option {
+	return func(c *Client) {
+		algo := compress.AlgorithmZSTD
+		if algorithm == "gzip" {
+			algo = compress.AlgorithmGzip
+		}
+		compressionLevel := compress.Level(level)
+		if compressionLevel == 0 {
+			compressionLevel = compress.LevelDefault
+		}
+		c.compressor = compress.NewCompressor(algo, compressionLevel)
+		c.compressionLevel = compressionLevel
+		c.analyzer = compress.NewAnalyzer(nil)
+	}
+}
+
+// WithoutCompression disables request compression.
+func WithoutCompression() Option {
+	return func(c *Client) {
+		c.compressor = nil
+		c.analyzer = nil
 	}
 }
 
@@ -510,7 +571,24 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body []byte)
 
 // doRequestOnce performs a single HTTP request.
 func (c *Client) doRequestOnce(ctx context.Context, method, url string, body []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	// Compress body if compression is enabled and body is large enough
+	requestBody := body
+	var contentEncoding string
+
+	if c.compressor != nil && len(body) > 1024 { // Only compress if > 1KB
+		compressed, stats, err := c.compressor.CompressWithStats(body)
+		if err == nil && len(compressed) < len(body) {
+			// Only use compressed if it's actually smaller
+			requestBody = compressed
+			contentEncoding = c.compressor.ContentEncoding()
+			if c.verbose {
+				fmt.Printf("[rediver] Compressed request: %d -> %d bytes (%.1f%% savings)\n",
+					stats.OriginalSize, stats.CompressedSize, stats.Savings)
+			}
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -518,6 +596,11 @@ func (c *Client) doRequestOnce(ctx context.Context, method, url string, body []b
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("User-Agent", "sdk/1.0")
+
+	// Add Content-Encoding header if compressed
+	if contentEncoding != "" {
+		req.Header.Set("Content-Encoding", contentEncoding)
+	}
 
 	// Add agent ID header for audit trail
 	if c.agentID != "" {
@@ -1216,6 +1299,107 @@ func (c *Client) GetKEVEntries(ctx context.Context, cveIDs []string) ([]KEVEntry
 	}
 
 	return resp.Entries, nil
+}
+
+// =============================================================================
+// Chunked Upload API
+// =============================================================================
+
+// ChunkUploadResponse is the response from chunk upload endpoint.
+type ChunkUploadResponse struct {
+	ChunkID         string `json:"chunk_id"`
+	ReportID        string `json:"report_id"`
+	ChunkIndex      int    `json:"chunk_index"`
+	Status          string `json:"status"`
+	AssetsCreated   int    `json:"assets_created"`
+	AssetsUpdated   int    `json:"assets_updated"`
+	FindingsCreated int    `json:"findings_created"`
+	FindingsUpdated int    `json:"findings_updated"`
+	FindingsSkipped int    `json:"findings_skipped"`
+}
+
+// UploadChunk uploads a single chunk of a large report.
+// This implements the chunk.Uploader interface.
+func (c *Client) UploadChunk(ctx context.Context, data *chunk.ChunkData) error {
+	url := fmt.Sprintf("%s/api/v1/agent/ingest/chunk", c.baseURL)
+
+	if c.verbose {
+		fmt.Printf("[rediver] Uploading chunk %d/%d for report %s\n",
+			data.ChunkIndex+1, data.TotalChunks, data.ReportID)
+	}
+
+	// Serialize chunk data
+	chunkJSON, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshal chunk data: %w", err)
+	}
+
+	// Compress chunk data using ZSTD (default)
+	var compressedData []byte
+	compressionAlgo := "zstd"
+
+	if c.compressor != nil {
+		compressedData, err = c.compressor.Compress(chunkJSON)
+		if err != nil {
+			return fmt.Errorf("compress chunk data: %w", err)
+		}
+		compressionAlgo = string(c.compressor.Algorithm())
+	} else {
+		// Use default ZSTD compressor
+		compressedData, err = compress.QuickCompress(chunkJSON)
+		if err != nil {
+			return fmt.Errorf("compress chunk data: %w", err)
+		}
+	}
+
+	// Base64 encode compressed data
+	encodedData := base64.StdEncoding.EncodeToString(compressedData)
+
+	// Build request body
+	reqBody := struct {
+		ReportID    string `json:"report_id"`
+		ChunkIndex  int    `json:"chunk_index"`
+		TotalChunks int    `json:"total_chunks"`
+		Compression string `json:"compression"`
+		Data        string `json:"data"`
+		IsFinal     bool   `json:"is_final"`
+	}{
+		ReportID:    data.ReportID,
+		ChunkIndex:  data.ChunkIndex,
+		TotalChunks: data.TotalChunks,
+		Compression: compressionAlgo,
+		Data:        encodedData,
+		IsFinal:     data.IsFinal,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+
+	// Send request (the body itself is not compressed at HTTP level since data is base64)
+	respBody, err := c.doRequest(ctx, "POST", url, body)
+	if err != nil {
+		return fmt.Errorf("upload chunk: %w", err)
+	}
+
+	var resp ChunkUploadResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[rediver] Chunk %d/%d uploaded: %d findings, %d assets\n",
+			data.ChunkIndex+1, data.TotalChunks, resp.FindingsCreated, resp.AssetsCreated)
+	}
+
+	return nil
+}
+
+// AsChunkUploader returns the client as a chunk.Uploader interface.
+// This is useful for passing to chunk.Manager.
+func (c *Client) AsChunkUploader() chunk.Uploader {
+	return c
 }
 
 // EnrichFindings adds EPSS and KEV data to findings with CVE IDs.

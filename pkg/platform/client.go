@@ -4,6 +4,12 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/rediverio/sdk/pkg/audit"
+	"github.com/rediverio/sdk/pkg/chunk"
+	"github.com/rediverio/sdk/pkg/pipeline"
+	"github.com/rediverio/sdk/pkg/resource"
+	"github.com/rediverio/sdk/pkg/ris"
 )
 
 // ClientConfig configures the PlatformClient.
@@ -104,6 +110,14 @@ type AgentBuilder struct {
 	onLeaseExpired  func()
 	onJobStarted    func(*JobInfo)
 	onJobCompleted  func(*JobInfo, *JobResult)
+
+	// SDK integrations
+	resourceConfig *resource.ControllerConfig
+	auditConfig    *audit.LoggerConfig
+	pipelineConfig *pipeline.PipelineConfig
+	uploader       pipeline.Uploader
+	chunkConfig    *chunk.Config
+	chunkUploader  chunk.Uploader
 }
 
 // NewAgentBuilder creates a new AgentBuilder.
@@ -193,6 +207,39 @@ func (b *AgentBuilder) WithVerbose(v bool) *AgentBuilder {
 	return b
 }
 
+// WithResourceController enables resource throttling with the given config.
+// When enabled, jobs will only be accepted when CPU/memory are below thresholds.
+func (b *AgentBuilder) WithResourceController(config *resource.ControllerConfig) *AgentBuilder {
+	b.resourceConfig = config
+	return b
+}
+
+// WithAuditLogger enables audit logging with the given config.
+// When enabled, all job lifecycle events will be logged.
+func (b *AgentBuilder) WithAuditLogger(config *audit.LoggerConfig) *AgentBuilder {
+	b.auditConfig = config
+	return b
+}
+
+// WithPipeline enables the async upload pipeline.
+// The pipeline allows scan results to be uploaded asynchronously in the background,
+// so scans can complete immediately without waiting for uploads.
+func (b *AgentBuilder) WithPipeline(config *pipeline.PipelineConfig, uploader pipeline.Uploader) *AgentBuilder {
+	b.pipelineConfig = config
+	b.uploader = uploader
+	return b
+}
+
+// WithChunkManager enables chunked uploads for large reports.
+// When enabled, large reports are automatically detected and split into chunks
+// for efficient upload. The chunk manager handles compression, storage,
+// retry, and background upload.
+func (b *AgentBuilder) WithChunkManager(config *chunk.Config, uploader chunk.Uploader) *AgentBuilder {
+	b.chunkConfig = config
+	b.chunkUploader = uploader
+	return b
+}
+
 // Build creates a PlatformAgent from the builder configuration.
 func (b *AgentBuilder) Build() (*PlatformAgent, error) {
 	if b.config.BaseURL == "" {
@@ -220,12 +267,118 @@ func (b *AgentBuilder) Build() (*PlatformAgent, error) {
 	poller := NewJobPoller(client, b.executor, b.pollerConfig)
 	poller.SetLeaseManager(leaseManager)
 
-	return &PlatformAgent{
+	agent := &PlatformAgent{
 		client:       client,
 		leaseManager: leaseManager,
 		poller:       poller,
 		config:       b.config,
-	}, nil
+	}
+
+	// Create resource controller if configured
+	if b.resourceConfig != nil {
+		// Sync verbose setting
+		b.resourceConfig.Verbose = b.config.Verbose
+
+		// Sync max concurrent jobs if not set
+		if b.resourceConfig.MaxConcurrentJobs <= 0 && b.pollerConfig.MaxConcurrentJobs > 0 {
+			b.resourceConfig.MaxConcurrentJobs = b.pollerConfig.MaxConcurrentJobs
+		}
+
+		agent.resourceController = resource.NewController(b.resourceConfig)
+		poller.SetResourceController(agent.resourceController)
+	}
+
+	// Create audit logger if configured
+	if b.auditConfig != nil {
+		// Set agent ID if not already set
+		if b.auditConfig.AgentID == "" {
+			b.auditConfig.AgentID = b.config.AgentID
+		}
+		b.auditConfig.Verbose = b.config.Verbose
+
+		logger, err := audit.NewLogger(b.auditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("create audit logger: %w", err)
+		}
+		agent.auditLogger = logger
+		poller.SetAuditLogger(logger)
+	}
+
+	// Create upload pipeline if configured
+	if b.pipelineConfig != nil && b.uploader != nil {
+		b.pipelineConfig.Verbose = b.config.Verbose
+
+		// Wire audit logging to pipeline callbacks
+		if agent.auditLogger != nil {
+			originalOnCompleted := b.pipelineConfig.OnCompleted
+			b.pipelineConfig.OnCompleted = func(item *pipeline.QueueItem, result *pipeline.Result) {
+				agent.auditLogger.Info(audit.EventUploadCompleted, "Upload completed", map[string]interface{}{
+					"queue_item_id":    item.ID,
+					"job_id":           item.JobID,
+					"findings_created": result.FindingsCreated,
+					"assets_created":   result.AssetsCreated,
+				})
+				if originalOnCompleted != nil {
+					originalOnCompleted(item, result)
+				}
+			}
+
+			originalOnFailed := b.pipelineConfig.OnFailed
+			b.pipelineConfig.OnFailed = func(item *pipeline.QueueItem, err error) {
+				agent.auditLogger.Error(audit.EventUploadFailed, "Upload failed", err, map[string]interface{}{
+					"queue_item_id": item.ID,
+					"job_id":        item.JobID,
+					"attempts":      item.Attempts,
+				})
+				if originalOnFailed != nil {
+					originalOnFailed(item, err)
+				}
+			}
+		}
+
+		agent.uploadPipeline = pipeline.NewPipeline(b.pipelineConfig, b.uploader)
+	}
+
+	// Create chunk manager if configured
+	if b.chunkConfig != nil {
+		chunkMgr, err := chunk.NewManager(b.chunkConfig)
+		if err != nil {
+			return nil, fmt.Errorf("create chunk manager: %w", err)
+		}
+
+		if b.chunkUploader != nil {
+			chunkMgr.SetUploader(b.chunkUploader)
+		}
+
+		// Set verbose mode
+		chunkMgr.SetVerbose(b.config.Verbose)
+
+		// Wire audit logging to chunk callbacks
+		if agent.auditLogger != nil {
+			chunkMgr.SetCallbacks(
+				// onProgress
+				func(p *chunk.Progress) {
+					agent.auditLogger.ChunkUploaded(p.ReportID, p.CompletedChunks, p.TotalChunks, int(p.BytesUploaded))
+				},
+				// onComplete
+				func(reportID string) {
+					agent.auditLogger.Info(audit.EventUploadCompleted, "Chunked upload completed", map[string]interface{}{
+						"report_id": reportID,
+					})
+				},
+				// onError
+				func(reportID string, err error) {
+					agent.auditLogger.Error(audit.EventChunkFailed, "Chunked upload failed", err, map[string]interface{}{
+						"report_id": reportID,
+					})
+				},
+			)
+		}
+
+		agent.chunkManager = chunkMgr
+	}
+
+	return agent, nil
 }
 
 // =============================================================================
@@ -238,6 +391,12 @@ type PlatformAgent struct {
 	leaseManager *LeaseManager
 	poller       *JobPoller
 	config       *ClientConfig
+
+	// SDK integrations
+	resourceController *resource.Controller
+	auditLogger        *audit.Logger
+	uploadPipeline     *pipeline.Pipeline
+	chunkManager       *chunk.Manager
 }
 
 // Start starts the platform agent (lease manager + job poller).
@@ -246,8 +405,52 @@ func (a *PlatformAgent) Start(ctx context.Context) error {
 		fmt.Printf("[agent] Starting platform agent %s\n", a.config.AgentID)
 	}
 
-	// Start lease manager first
+	// Start resource controller if configured
+	if a.resourceController != nil {
+		if err := a.resourceController.Start(ctx); err != nil {
+			return fmt.Errorf("start resource controller: %w", err)
+		}
+		if a.config.Verbose {
+			fmt.Printf("[agent] Resource controller started\n")
+		}
+	}
+
+	// Start audit logger if configured
+	if a.auditLogger != nil {
+		a.auditLogger.Start()
+		a.auditLogger.Info(audit.EventAgentStart, "Platform agent starting", map[string]interface{}{
+			"agent_id": a.config.AgentID,
+		})
+		if a.config.Verbose {
+			fmt.Printf("[agent] Audit logger started\n")
+		}
+	}
+
+	// Start upload pipeline if configured
+	if a.uploadPipeline != nil {
+		if err := a.uploadPipeline.Start(ctx); err != nil {
+			a.stopHelpers()
+			return fmt.Errorf("start upload pipeline: %w", err)
+		}
+		if a.config.Verbose {
+			fmt.Printf("[agent] Upload pipeline started\n")
+		}
+	}
+
+	// Start chunk manager if configured
+	if a.chunkManager != nil {
+		if err := a.chunkManager.Start(ctx); err != nil {
+			a.stopHelpers()
+			return fmt.Errorf("start chunk manager: %w", err)
+		}
+		if a.config.Verbose {
+			fmt.Printf("[agent] Chunk manager started\n")
+		}
+	}
+
+	// Start lease manager
 	if err := a.leaseManager.Start(ctx); err != nil {
+		a.stopHelpers()
 		return fmt.Errorf("start lease manager: %w", err)
 	}
 
@@ -255,6 +458,7 @@ func (a *PlatformAgent) Start(ctx context.Context) error {
 	if err := a.poller.Start(ctx); err != nil {
 		// Stop lease manager if poller fails
 		_ = a.leaseManager.Stop(ctx)
+		a.stopHelpers()
 		return fmt.Errorf("start job poller: %w", err)
 	}
 
@@ -265,10 +469,40 @@ func (a *PlatformAgent) Start(ctx context.Context) error {
 	return nil
 }
 
+// stopHelpers stops resource controller, audit logger, pipeline, and chunk manager.
+func (a *PlatformAgent) stopHelpers() {
+	// Stop pipeline first (wait for pending uploads)
+	if a.uploadPipeline != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		a.uploadPipeline.Stop(ctx)
+		cancel()
+	}
+
+	// Close chunk manager (flushes pending chunks)
+	if a.chunkManager != nil {
+		a.chunkManager.Close()
+	}
+
+	if a.resourceController != nil {
+		a.resourceController.Stop()
+	}
+	if a.auditLogger != nil {
+		a.auditLogger.Flush()
+		a.auditLogger.Stop()
+	}
+}
+
 // Stop stops the platform agent gracefully.
 func (a *PlatformAgent) Stop(ctx context.Context, timeout time.Duration) error {
 	if a.config.Verbose {
 		fmt.Printf("[agent] Stopping platform agent...\n")
+	}
+
+	// Log agent stop event
+	if a.auditLogger != nil {
+		a.auditLogger.Info(audit.EventAgentStop, "Platform agent stopping", map[string]interface{}{
+			"agent_id": a.config.AgentID,
+		})
 	}
 
 	// Stop poller first (stop accepting new jobs)
@@ -284,6 +518,9 @@ func (a *PlatformAgent) Stop(ctx context.Context, timeout time.Duration) error {
 			fmt.Printf("[agent] Warning: lease release error: %v\n", err)
 		}
 	}
+
+	// Stop helpers (resource controller, audit logger)
+	a.stopHelpers()
 
 	if a.config.Verbose {
 		fmt.Printf("[agent] Platform agent stopped\n")
@@ -314,4 +551,113 @@ type AgentStatus struct {
 	CurrentJobs int
 	LastRenew   time.Time
 	LastError   error
+
+	// Resource status (if controller is enabled)
+	ResourceStatus *resource.ControllerStatus
+}
+
+// ResourceController returns the resource controller if configured.
+func (a *PlatformAgent) ResourceController() *resource.Controller {
+	return a.resourceController
+}
+
+// AuditLogger returns the audit logger if configured.
+func (a *PlatformAgent) AuditLogger() *audit.Logger {
+	return a.auditLogger
+}
+
+// ExtendedStatus returns the full agent status including resource metrics.
+func (a *PlatformAgent) ExtendedStatus() *AgentStatus {
+	status := a.Status()
+
+	if a.resourceController != nil {
+		status.ResourceStatus = a.resourceController.GetStatus()
+	}
+
+	return status
+}
+
+// Pipeline returns the upload pipeline if configured.
+func (a *PlatformAgent) Pipeline() *pipeline.Pipeline {
+	return a.uploadPipeline
+}
+
+// SubmitReport queues a report for async upload via the pipeline.
+// Returns immediately after queueing. Use Pipeline().GetStats() to monitor progress.
+// Returns an error if the pipeline is not configured.
+func (a *PlatformAgent) SubmitReport(report *ris.Report, opts ...pipeline.SubmitOption) (string, error) {
+	if a.uploadPipeline == nil {
+		return "", fmt.Errorf("upload pipeline not configured")
+	}
+	return a.uploadPipeline.Submit(report, opts...)
+}
+
+// FlushPipeline waits for all pending uploads to complete.
+// Returns an error if the pipeline is not configured or if the context is canceled.
+func (a *PlatformAgent) FlushPipeline(ctx context.Context) error {
+	if a.uploadPipeline == nil {
+		return nil // No pipeline, nothing to flush
+	}
+	return a.uploadPipeline.Flush(ctx)
+}
+
+// PipelineStats returns the current pipeline statistics.
+// Returns nil if the pipeline is not configured.
+func (a *PlatformAgent) PipelineStats() *pipeline.Stats {
+	if a.uploadPipeline == nil {
+		return nil
+	}
+	return a.uploadPipeline.GetStats()
+}
+
+// ChunkManager returns the chunk manager if configured.
+func (a *PlatformAgent) ChunkManager() *chunk.Manager {
+	return a.chunkManager
+}
+
+// NeedsChunking checks if a report should be uploaded via chunking.
+// Returns false if chunk manager is not configured.
+func (a *PlatformAgent) NeedsChunking(report *ris.Report) bool {
+	if a.chunkManager == nil {
+		return false
+	}
+	return a.chunkManager.NeedsChunking(report)
+}
+
+// SubmitChunkedReport queues a large report for chunked upload.
+// The report will be split into chunks, compressed, and uploaded in the background.
+// Returns an error if the chunk manager is not configured.
+func (a *PlatformAgent) SubmitChunkedReport(ctx context.Context, report *ris.Report) (*chunk.Report, error) {
+	if a.chunkManager == nil {
+		return nil, fmt.Errorf("chunk manager not configured")
+	}
+	return a.chunkManager.SubmitReport(ctx, report)
+}
+
+// SmartSubmitReport automatically chooses between regular upload, pipeline, or chunked upload.
+// - Small reports: uploaded directly via pipeline (if configured) or returned for manual upload
+// - Large reports: uploaded via chunk manager (if configured)
+//
+// Returns:
+// - For pipeline submissions: (pipelineItemID, nil, nil)
+// - For chunked submissions: ("", chunkReport, nil)
+// - If neither is configured: ("", nil, error)
+func (a *PlatformAgent) SmartSubmitReport(ctx context.Context, report *ris.Report, opts ...pipeline.SubmitOption) (string, *chunk.Report, error) {
+	// Check if report needs chunking
+	if a.NeedsChunking(report) {
+		if a.chunkManager == nil {
+			return "", nil, fmt.Errorf("large report requires chunking but chunk manager not configured")
+		}
+		chunkReport, err := a.chunkManager.SubmitReport(ctx, report)
+		return "", chunkReport, err
+	}
+
+	// Use pipeline for smaller reports
+	if a.uploadPipeline != nil {
+		id, err := a.uploadPipeline.Submit(report, opts...)
+		return id, nil, err
+	}
+
+	// Neither configured
+	return "", nil, fmt.Errorf("no upload mechanism configured (neither pipeline nor chunk manager)")
 }

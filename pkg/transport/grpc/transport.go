@@ -5,6 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,12 +100,27 @@ func (t *Transport) Connect(ctx context.Context) error {
 
 	// TLS configuration
 	if t.config.UseTLS {
+		// Extract hostname for ServerName from address
+		serverName := extractHostname(t.config.Address)
+
 		tlsConfig := &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: t.config.InsecureSkipVerify, //nolint:gosec // Intentional for dev environments
+			MinVersion: tls.VersionTLS12,
+			ServerName: serverName, // Proper hostname verification
 		}
+
+		// SECURITY WARNING: InsecureSkipVerify disables certificate verification
+		// This should ONLY be used for development/testing environments
+		if t.config.InsecureSkipVerify {
+			log.Printf("[SECURITY WARNING] TLS certificate verification is DISABLED for %s. "+
+				"This is insecure and should NOT be used in production!", t.config.Address)
+			tlsConfig.InsecureSkipVerify = true //nolint:gosec // Intentional for dev environments, logged warning above
+		}
+
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
+		// SECURITY WARNING: Insecure connection
+		log.Printf("[SECURITY WARNING] Using insecure (non-TLS) connection to %s. "+
+			"Enable TLS for production use!", t.config.Address)
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
@@ -185,4 +203,45 @@ func (t *Transport) addAuthMetadata(ctx context.Context) context.Context {
 		md.Set("x-agent-id", t.config.AgentID)
 	}
 	return metadata.NewOutgoingContext(ctx, md)
+}
+
+// extractHostname extracts the hostname from an address for TLS ServerName.
+func extractHostname(address string) string {
+	// Handle both "host:port" and "scheme://host:port" formats
+	if strings.Contains(address, "://") {
+		if u, err := url.Parse(address); err == nil {
+			return u.Hostname()
+		}
+	}
+	// Handle "host:port" format
+	if idx := strings.LastIndex(address, ":"); idx != -1 {
+		return address[:idx]
+	}
+	return address
+}
+
+// ValidateAddress validates a gRPC server address for security issues.
+// Returns an error if the address contains potentially dangerous patterns.
+func ValidateAddress(address string) error {
+	if address == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+
+	// Reject local file schemes (SSRF prevention)
+	lower := strings.ToLower(address)
+	if strings.HasPrefix(lower, "file://") ||
+		strings.HasPrefix(lower, "unix://") ||
+		strings.HasPrefix(lower, "gopher://") {
+		return fmt.Errorf("invalid scheme: only grpc:// or direct host:port allowed")
+	}
+
+	// Extract hostname for validation
+	hostname := extractHostname(address)
+
+	// Reject localhost aliases that could be SSRF
+	if hostname == "0.0.0.0" || hostname == "[::]" {
+		return fmt.Errorf("invalid address: binding addresses not allowed as targets")
+	}
+
+	return nil
 }

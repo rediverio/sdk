@@ -134,8 +134,71 @@ type Asset struct {
 	// Related assets (by ID within this report)
 	RelatedAssets []string `json:"related_assets,omitempty"`
 
+	// CTEM: Compliance context for the asset
+	Compliance *AssetCompliance `json:"compliance,omitempty"`
+
+	// CTEM: Services running on this asset
+	Services []ServiceInfo `json:"services,omitempty"`
+
+	// CTEM: Is the asset directly accessible from the internet
+	IsInternetAccessible bool `json:"is_internet_accessible,omitempty"`
+
 	// Custom properties
 	Properties Properties `json:"properties,omitempty"`
+}
+
+// AssetCompliance contains CTEM compliance context for an asset.
+type AssetCompliance struct {
+	// Compliance frameworks this asset is in scope for: PCI-DSS, HIPAA, SOC2, GDPR, ISO27001
+	Frameworks []string `json:"frameworks,omitempty"`
+
+	// Data classification level: public, internal, confidential, restricted, secret
+	DataClassification string `json:"data_classification,omitempty"`
+
+	// Asset contains Personally Identifiable Information
+	PIIExposed bool `json:"pii_exposed,omitempty"`
+
+	// Asset contains Protected Health Information
+	PHIExposed bool `json:"phi_exposed,omitempty"`
+
+	// Regulatory owner email/username
+	RegulatoryOwner string `json:"regulatory_owner,omitempty"`
+}
+
+// ServiceInfo represents a network service discovered on an asset.
+type ServiceInfo struct {
+	// Port number
+	Port int `json:"port"`
+
+	// Transport protocol: tcp, udp
+	Protocol string `json:"protocol,omitempty"`
+
+	// Service type: http, https, ssh, ftp, mysql, postgresql, etc.
+	ServiceType string `json:"service_type,omitempty"`
+
+	// Product name: Apache, nginx, OpenSSH, etc.
+	Product string `json:"product,omitempty"`
+
+	// Product version
+	Version string `json:"version,omitempty"`
+
+	// Service banner
+	Banner string `json:"banner,omitempty"`
+
+	// Common Platform Enumeration identifier
+	CPE string `json:"cpe,omitempty"`
+
+	// Is this service publicly accessible from the internet
+	IsPublic bool `json:"is_public,omitempty"`
+
+	// TLS enabled
+	TLSEnabled bool `json:"tls_enabled,omitempty"`
+
+	// TLS version: TLS 1.2, TLS 1.3
+	TLSVersion string `json:"tls_version,omitempty"`
+
+	// Service state: active, inactive, filtered
+	State string `json:"state,omitempty"`
 }
 
 // AssetTechnical contains type-specific technical details.
@@ -357,7 +420,7 @@ type ServiceTechnical struct {
 	// Port
 	Port int `json:"port,omitempty"`
 
-	// Protocol
+	// Protocol (application-layer): http, https, ssh, smtp, ftp, dns, ldap, smb, rdp, mysql, postgresql, mongodb, redis, etc.
 	Protocol string `json:"protocol,omitempty"`
 
 	// Transport: tcp, udp
@@ -366,14 +429,52 @@ type ServiceTechnical struct {
 	// SSL/TLS enabled
 	TLS bool `json:"tls,omitempty"`
 
+	// TLS version: tls1.0, tls1.1, tls1.2, tls1.3
+	TLSVersion string `json:"tls_version,omitempty"`
+
+	// TLS certificate info (for services with TLS)
+	TLSCertSubject string `json:"tls_cert_subject,omitempty"`
+	TLSCertIssuer  string `json:"tls_cert_issuer,omitempty"`
+	TLSCertExpiry  string `json:"tls_cert_expiry,omitempty"`
+
 	// Banner/fingerprint
 	Banner string `json:"banner,omitempty"`
 
-	// Product name
+	// Product name (e.g., "OpenSSH", "nginx", "Apache", "Postfix")
 	Product string `json:"product,omitempty"`
+
+	// CPE (Common Platform Enumeration) identifier
+	CPE string `json:"cpe,omitempty"`
 
 	// Extra info
 	ExtraInfo string `json:"extra_info,omitempty"`
+
+	// Service state: open, filtered, closed
+	State string `json:"state,omitempty"`
+
+	// Authentication required
+	AuthRequired bool `json:"auth_required,omitempty"`
+
+	// Authentication methods supported (e.g., ["password", "publickey"] for SSH)
+	AuthMethods []string `json:"auth_methods,omitempty"`
+
+	// Default credentials detected
+	DefaultCredentials bool `json:"default_credentials,omitempty"`
+
+	// Anonymous access allowed (for FTP, SMB, etc.)
+	AnonymousAccess bool `json:"anonymous_access,omitempty"`
+
+	// Response time in milliseconds
+	ResponseTimeMs int `json:"response_time_ms,omitempty"`
+
+	// Last seen timestamp
+	LastSeen string `json:"last_seen,omitempty"`
+
+	// Service-specific details (protocol-dependent)
+	// For HTTP: methods, headers, etc.
+	// For SMTP: EHLO response, supported extensions
+	// For SSH: supported algorithms, host keys
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // =============================================================================
@@ -856,8 +957,59 @@ type Finding struct {
 	// Suppression information (if finding is suppressed)
 	Suppression *Suppression `json:"suppression,omitempty"`
 
+	// CTEM: Exposure information
+	Exposure *FindingExposure `json:"exposure,omitempty"`
+
+	// CTEM: Remediation context
+	RemediationContext *RemediationContext `json:"remediation_context,omitempty"`
+
+	// CTEM: Business impact assessment
+	BusinessImpact *BusinessImpact `json:"business_impact,omitempty"`
+
 	// Custom properties
 	Properties Properties `json:"properties,omitempty"`
+}
+
+// FindingExposure contains CTEM exposure information for a finding.
+type FindingExposure struct {
+	// Exposure vector: network, local, physical, adjacent_net
+	Vector string `json:"vector,omitempty"`
+
+	// Is the finding reachable from the network
+	IsNetworkAccessible bool `json:"is_network_accessible,omitempty"`
+
+	// Is the finding directly reachable from the internet
+	IsInternetAccessible bool `json:"is_internet_accessible,omitempty"`
+
+	// Prerequisites for exploitation: auth_required, mfa_required, local_access, etc.
+	AttackPrerequisites string `json:"attack_prerequisites,omitempty"`
+}
+
+// RemediationContext contains CTEM remediation context for a finding.
+type RemediationContext struct {
+	// Remediation type: patch, upgrade, workaround, config_change, mitigate, accept_risk
+	Type string `json:"type,omitempty"`
+
+	// Estimated time to fix in minutes
+	EstimatedMinutes int `json:"estimated_minutes,omitempty"`
+
+	// Fix complexity: simple, moderate, complex
+	Complexity string `json:"complexity,omitempty"`
+
+	// Is a remedy (patch/fix) available
+	RemedyAvailable bool `json:"remedy_available,omitempty"`
+}
+
+// BusinessImpact contains CTEM business impact assessment for a finding.
+type BusinessImpact struct {
+	// Data exposure risk: none, low, medium, high, critical
+	DataExposureRisk string `json:"data_exposure_risk,omitempty"`
+
+	// Has potential reputational impact
+	ReputationalImpact bool `json:"reputational_impact,omitempty"`
+
+	// Compliance frameworks impacted: PCI-DSS, HIPAA, SOC2, GDPR, ISO27001
+	ComplianceImpact []string `json:"compliance_impact,omitempty"`
 }
 
 // FindingStatus represents the status of a finding.
@@ -1459,43 +1611,131 @@ type Remediation struct {
 type AssetType string
 
 const (
-	AssetTypeDomain       AssetType = "domain"
-	AssetTypeIPAddress    AssetType = "ip_address"
-	AssetTypeRepository   AssetType = "repository"
-	AssetTypeCertificate  AssetType = "certificate"
-	AssetTypeCloudAccount AssetType = "cloud_account"
-	AssetTypeCompute      AssetType = "compute"
-	AssetTypeStorage      AssetType = "storage"
-	AssetTypeDatabase     AssetType = "database"
-	AssetTypeService      AssetType = "service"
-	AssetTypeContainer    AssetType = "container"
-	AssetTypeKubernetes   AssetType = "kubernetes"
-	AssetTypeNetwork      AssetType = "network"
+	// ==========================================================================
+	// Discovery / External Attack Surface
+	// ==========================================================================
+	AssetTypeDomain      AssetType = "domain"
+	AssetTypeSubdomain   AssetType = "subdomain"
+	AssetTypeIPAddress   AssetType = "ip_address"
+	AssetTypeCertificate AssetType = "certificate"
 
+	// ==========================================================================
+	// Applications
+	// ==========================================================================
+	AssetTypeWebsite        AssetType = "website"         // Public-facing website
+	AssetTypeWebApplication AssetType = "web_application" // Web application (SaaS, internal apps)
+	AssetTypeAPI            AssetType = "api"             // API endpoint (REST, GraphQL, gRPC)
+	AssetTypeMobileApp      AssetType = "mobile_app"      // Mobile application (iOS, Android)
+	AssetTypeService        AssetType = "service"         // Network service (SSH, SMTP, FTP, DNS, etc.)
+
+	// ==========================================================================
+	// Code / Repository
+	// ==========================================================================
+	AssetTypeRepository AssetType = "repository"
+
+	// ==========================================================================
+	// Cloud
+	// ==========================================================================
+	AssetTypeCloudAccount      AssetType = "cloud_account"      // AWS Account, GCP Project, Azure Subscription
+	AssetTypeCompute           AssetType = "compute"            // EC2, GCE, Azure VM
+	AssetTypeStorage           AssetType = "storage"            // S3, GCS, Azure Blob
+	AssetTypeDatabase          AssetType = "database"           // RDS, Cloud SQL, Cosmos DB
+	AssetTypeServerless        AssetType = "serverless"         // Lambda, Cloud Functions, Azure Functions
+	AssetTypeContainerRegistry AssetType = "container_registry" // ECR, GCR, ACR
+
+	// ==========================================================================
+	// Infrastructure
+	// ==========================================================================
+	AssetTypeHost                AssetType = "host"                 // Physical or virtual host
+	AssetTypeServer              AssetType = "server"               // Server machine
+	AssetTypeContainer           AssetType = "container"            // Docker container
+	AssetTypeKubernetes          AssetType = "kubernetes"           // Kubernetes cluster (generic)
+	AssetTypeKubernetesCluster   AssetType = "kubernetes_cluster"   // Kubernetes cluster
+	AssetTypeKubernetesNamespace AssetType = "kubernetes_namespace" // Kubernetes namespace
+
+	// ==========================================================================
+	// Network
+	// ==========================================================================
+	AssetTypeNetwork      AssetType = "network"       // Network segment
+	AssetTypeVPC          AssetType = "vpc"           // Virtual Private Cloud
+	AssetTypeSubnet       AssetType = "subnet"        // Network subnet
+	AssetTypeLoadBalancer AssetType = "load_balancer" // Load balancer (ALB, NLB, etc.)
+	AssetTypeFirewall     AssetType = "firewall"      // Firewall / Security Group
+
+	// ==========================================================================
+	// Identity / IAM
+	// ==========================================================================
+	AssetTypeIAMUser        AssetType = "iam_user"        // IAM user
+	AssetTypeIAMRole        AssetType = "iam_role"        // IAM role
+	AssetTypeServiceAccount AssetType = "service_account" // Service account
+
+	// ==========================================================================
+	// Recon-discovered Asset Types
+	// ==========================================================================
+	AssetTypeHTTPService   AssetType = "http_service"   // HTTP/HTTPS services from HTTPX
+	AssetTypeOpenPort      AssetType = "open_port"      // Individual open ports from Naabu
+	AssetTypeDiscoveredURL AssetType = "discovered_url" // URLs/endpoints from Katana
+
+	// ==========================================================================
 	// Web3 Asset Types
+	// ==========================================================================
 	AssetTypeSmartContract AssetType = "smart_contract"
 	AssetTypeWallet        AssetType = "wallet"
 	AssetTypeNFTCollection AssetType = "nft_collection"
 	AssetTypeDeFiProtocol  AssetType = "defi_protocol"
 	AssetTypeToken         AssetType = "token"
 	AssetTypeBlockchain    AssetType = "blockchain"
+
+	// ==========================================================================
+	// Legacy / Backward Compatibility
+	// ==========================================================================
+	AssetTypeOther AssetType = "other" // Catch-all for unknown types
 )
 
 // AllAssetTypes returns all valid asset types.
 func AllAssetTypes() []AssetType {
 	return []AssetType{
+		// Discovery / External Attack Surface
 		AssetTypeDomain,
+		AssetTypeSubdomain,
 		AssetTypeIPAddress,
-		AssetTypeRepository,
 		AssetTypeCertificate,
+		// Applications
+		AssetTypeWebsite,
+		AssetTypeWebApplication,
+		AssetTypeAPI,
+		AssetTypeMobileApp,
+		AssetTypeService,
+		// Code / Repository
+		AssetTypeRepository,
+		// Cloud
 		AssetTypeCloudAccount,
 		AssetTypeCompute,
 		AssetTypeStorage,
 		AssetTypeDatabase,
-		AssetTypeService,
+		AssetTypeServerless,
+		AssetTypeContainerRegistry,
+		// Infrastructure
+		AssetTypeHost,
+		AssetTypeServer,
 		AssetTypeContainer,
 		AssetTypeKubernetes,
+		AssetTypeKubernetesCluster,
+		AssetTypeKubernetesNamespace,
+		// Network
 		AssetTypeNetwork,
+		AssetTypeVPC,
+		AssetTypeSubnet,
+		AssetTypeLoadBalancer,
+		AssetTypeFirewall,
+		// Identity / IAM
+		AssetTypeIAMUser,
+		AssetTypeIAMRole,
+		AssetTypeServiceAccount,
+		// Recon-discovered
+		AssetTypeHTTPService,
+		AssetTypeOpenPort,
+		AssetTypeDiscoveredURL,
 		// Web3
 		AssetTypeSmartContract,
 		AssetTypeWallet,
@@ -1503,6 +1743,8 @@ func AllAssetTypes() []AssetType {
 		AssetTypeDeFiProtocol,
 		AssetTypeToken,
 		AssetTypeBlockchain,
+		// Legacy
+		AssetTypeOther,
 	}
 }
 

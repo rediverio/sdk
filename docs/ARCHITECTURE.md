@@ -263,8 +263,36 @@ func (p *MyProvider) ListCollectors() []core.Collector {
 
 6. **Use gRPC for streaming**: For large batches, use gRPC streaming instead of REST.
 
+7. **Security best practices**: Follow the SDK security guide for production deployments:
+   - Use `EncryptedFileStore` for credentials
+   - Enable TLS for gRPC transport
+   - Configure job validation for platform agents
+   - Use secure lease identities (default)
+
+## Security Features (v1.1+)
+
+The SDK includes comprehensive security controls:
+
+### Credential Security
+- **Encrypted storage**: AES-256-GCM encryption at rest
+- **Key validation**: Path traversal and injection prevention
+- **Secure comparison**: Constant-time credential verification
+
+### Transport Security
+- **TLS enforcement**: Minimum TLS 1.2, proper ServerName validation
+- **Address validation**: SSRF prevention for server addresses
+
+### Platform Agent Security
+- **Job validation**: Type whitelist, payload limits, auth token verification
+- **Lease security**: Cryptographic identity prevents hijacking
+- **Lease expiry**: Automatic job cancellation on expiry
+- **Template security**: Path traversal prevention, size limits
+
+See [Security Guide](./SECURITY.md) for detailed information.
+
 ## See Also
 
 - [SDK README](../README.md) - Quick start guide
+- [Security Guide](./SECURITY.md) - Security best practices
 - [API Documentation](../../api/docs/API.md) - Backend API reference
 - [RIS Schema](../pkg/ris/types.go) - Full RIS type definitions

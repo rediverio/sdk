@@ -685,3 +685,159 @@ type EnricherConfig struct {
 	// Debug
 	Verbose bool `yaml:"verbose" json:"verbose"`
 }
+
+// =============================================================================
+// Recon Scanner Interface - For reconnaissance and asset discovery
+// =============================================================================
+
+// ReconType represents the type of reconnaissance scan.
+type ReconType string
+
+const (
+	ReconTypeSubdomain  ReconType = "subdomain"   // Subdomain enumeration
+	ReconTypeDNS        ReconType = "dns"         // DNS resolution and records
+	ReconTypePort       ReconType = "port"        // Port scanning
+	ReconTypeHTTPProbe  ReconType = "http_probe"  // HTTP/HTTPS probing
+	ReconTypeURLCrawl   ReconType = "url_crawl"   // URL and endpoint crawling
+	ReconTypeTechDetect ReconType = "tech_detect" // Technology fingerprinting
+)
+
+// ReconScanner performs reconnaissance and asset discovery.
+// Implement this interface to create a custom recon scanner.
+type ReconScanner interface {
+	// Name returns the scanner name (e.g., "subfinder", "naabu")
+	Name() string
+
+	// Version returns the scanner version
+	Version() string
+
+	// Type returns the recon type this scanner performs
+	Type() ReconType
+
+	// Scan performs reconnaissance on the target and returns results
+	Scan(ctx context.Context, target string, opts *ReconOptions) (*ReconResult, error)
+
+	// IsInstalled checks if the underlying tool is available
+	IsInstalled(ctx context.Context) (bool, string, error)
+}
+
+// ReconOptions configures a reconnaissance scan.
+type ReconOptions struct {
+	// Target configuration
+	Target     string   `yaml:"target" json:"target"`           // Domain, IP, or CIDR
+	InputFile  string   `yaml:"input_file" json:"input_file"`   // File with multiple targets
+	OutputFile string   `yaml:"output_file" json:"output_file"` // Output file path
+	ExtraArgs  []string `yaml:"extra_args" json:"extra_args"`   // Additional CLI args
+
+	// Performance
+	Threads   int           `yaml:"threads" json:"threads"`       // Concurrency
+	RateLimit int           `yaml:"rate_limit" json:"rate_limit"` // Rate limit (requests/second)
+	Timeout   time.Duration `yaml:"timeout" json:"timeout"`       // Scan timeout
+
+	// DNS configuration
+	Resolvers []string `yaml:"resolvers" json:"resolvers"` // Custom DNS resolvers
+
+	// Environment
+	Env map[string]string `yaml:"env" json:"env"` // Environment variables
+
+	// Output
+	Verbose bool `yaml:"verbose" json:"verbose"`
+}
+
+// ReconResult holds the reconnaissance scan result.
+type ReconResult struct {
+	// Scanner info
+	ScannerName    string    `json:"scanner_name"`
+	ScannerVersion string    `json:"scanner_version"`
+	ReconType      ReconType `json:"recon_type"`
+
+	// Target
+	Target string `json:"target"`
+
+	// Timing
+	StartedAt  int64 `json:"started_at"`
+	FinishedAt int64 `json:"finished_at"`
+	DurationMs int64 `json:"duration_ms"`
+
+	// Results (populated based on ReconType)
+	Subdomains   []Subdomain     `json:"subdomains,omitempty"`
+	DNSRecords   []DNSRecord     `json:"dns_records,omitempty"`
+	OpenPorts    []OpenPort      `json:"open_ports,omitempty"`
+	LiveHosts    []LiveHost      `json:"live_hosts,omitempty"`
+	URLs         []DiscoveredURL `json:"urls,omitempty"`
+	Technologies []Technology    `json:"technologies,omitempty"`
+
+	// Raw output
+	RawOutput []byte `json:"raw_output,omitempty"`
+	ExitCode  int    `json:"exit_code"`
+	Error     string `json:"error,omitempty"`
+}
+
+// Subdomain represents a discovered subdomain.
+type Subdomain struct {
+	Host   string   `json:"host"`             // Full subdomain (e.g., api.example.com)
+	Domain string   `json:"domain"`           // Root domain (e.g., example.com)
+	Source string   `json:"source,omitempty"` // Discovery source (crtsh, hackertarget, etc.)
+	IPs    []string `json:"ips,omitempty"`    // Resolved IP addresses
+}
+
+// DNSRecord represents a DNS record.
+type DNSRecord struct {
+	Host       string   `json:"host"`                  // Hostname
+	RecordType string   `json:"record_type"`           // A, AAAA, CNAME, MX, NS, TXT, SOA
+	Values     []string `json:"values"`                // Record values
+	TTL        int      `json:"ttl,omitempty"`         // Time to live
+	Resolver   string   `json:"resolver,omitempty"`    // Resolver used
+	StatusCode string   `json:"status_code,omitempty"` // NOERROR, NXDOMAIN, etc.
+}
+
+// OpenPort represents an open port on a host.
+type OpenPort struct {
+	Host     string `json:"host"`               // IP or hostname
+	IP       string `json:"ip,omitempty"`       // IP address
+	Port     int    `json:"port"`               // Port number
+	Protocol string `json:"protocol,omitempty"` // tcp, udp
+	Service  string `json:"service,omitempty"`  // Detected service name
+	Version  string `json:"version,omitempty"`  // Service version
+	Banner   string `json:"banner,omitempty"`   // Service banner
+}
+
+// LiveHost represents an HTTP/HTTPS live host.
+type LiveHost struct {
+	URL           string   `json:"url"`                      // Full URL (https://example.com)
+	Host          string   `json:"host"`                     // Hostname
+	IP            string   `json:"ip,omitempty"`             // Resolved IP
+	Port          int      `json:"port,omitempty"`           // Port number
+	Scheme        string   `json:"scheme"`                   // http or https
+	StatusCode    int      `json:"status_code"`              // HTTP status code
+	ContentLength int64    `json:"content_length,omitempty"` // Response size
+	Title         string   `json:"title,omitempty"`          // Page title
+	WebServer     string   `json:"web_server,omitempty"`     // Server header
+	ContentType   string   `json:"content_type,omitempty"`   // Content-Type header
+	Technologies  []string `json:"technologies,omitempty"`   // Detected technologies
+	CDN           string   `json:"cdn,omitempty"`            // CDN provider
+	TLSVersion    string   `json:"tls_version,omitempty"`    // TLS version
+	Redirect      string   `json:"redirect,omitempty"`       // Final redirect URL
+	ResponseTime  int64    `json:"response_time_ms"`         // Response time in ms
+}
+
+// DiscoveredURL represents a discovered URL/endpoint.
+type DiscoveredURL struct {
+	URL        string `json:"url"`                  // Full URL
+	Method     string `json:"method,omitempty"`     // HTTP method (GET, POST, etc.)
+	Source     string `json:"source,omitempty"`     // Discovery source (crawl, js, archive)
+	StatusCode int    `json:"status_code,omitempty"`
+	Depth      int    `json:"depth,omitempty"`     // Crawl depth
+	Parent     string `json:"parent,omitempty"`    // Parent URL
+	Type       string `json:"type,omitempty"`      // endpoint, form, api, static
+	Extension  string `json:"extension,omitempty"` // File extension
+}
+
+// Technology represents a detected technology.
+type Technology struct {
+	Name       string   `json:"name"`                 // Technology name
+	Version    string   `json:"version,omitempty"`    // Version if detected
+	Categories []string `json:"categories,omitempty"` // Category (framework, cms, etc.)
+	Confidence int      `json:"confidence,omitempty"` // Detection confidence (0-100)
+	Website    string   `json:"website,omitempty"`    // Technology website
+}

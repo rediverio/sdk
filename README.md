@@ -635,6 +635,7 @@ sdk/
 │   └── rediver/v1/         # gRPC service definitions
 ├── docs/                   # Documentation
 │   ├── ARCHITECTURE.md     # Agent/Component architecture
+│   ├── SECURITY.md         # Security features and best practices
 │   └── GRPC.md             # gRPC configuration guide
 ├── examples/               # Usage examples
 └── test/                   # Integration tests
@@ -891,6 +892,23 @@ security-scan:
 
 **Region Auto-Detection:** If `REGION` is not set, the agent will auto-detect from cloud environment variables: `AWS_REGION`, `GOOGLE_CLOUD_REGION`, `AZURE_REGION`.
 
+## Security Features (v1.1+)
+
+The SDK includes comprehensive security controls for production deployments:
+
+| Feature | Description |
+|---------|-------------|
+| **Encrypted Credentials** | AES-256-GCM encrypted storage with `EncryptedFileStore` |
+| **Key Validation** | Path traversal and injection prevention for credential keys |
+| **Secure Comparison** | Constant-time credential verification |
+| **TLS Enforcement** | Minimum TLS 1.2 with ServerName validation for gRPC |
+| **Address Validation** | SSRF prevention for server addresses |
+| **Job Validation** | Type whitelist, payload limits, auth token verification |
+| **Lease Security** | Cryptographic identity prevents hijacking |
+| **Template Security** | Path traversal prevention, size limits |
+
+See [docs/SECURITY.md](docs/SECURITY.md) for detailed information.
+
 ## Best Practices
 
 1. **Embed Base Types**: Use `BaseScanner`, `BaseAgent` to avoid boilerplate
@@ -899,6 +917,8 @@ security-scan:
 4. **Handle Errors**: Use proper error wrapping and types
 5. **Support CI Detection**: Use `gitenv.Detect()` for auto-configuration
 6. **Generate Fingerprints**: Use consistent fingerprinting for deduplication
+7. **Use Secure Storage**: Use `EncryptedFileStore` for sensitive credentials
+8. **Enable TLS**: Always use TLS for gRPC transport in production
 
 ## Development
 

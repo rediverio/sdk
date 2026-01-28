@@ -67,6 +67,63 @@ type EmbeddedTemplate struct {
 	ContentHash  string `json:"content_hash"`  // SHA256 hash of decoded content for verification
 }
 
+// ValidTemplateTypes defines allowed template types for security validation.
+var ValidTemplateTypes = map[string]bool{
+	"nuclei":   true,
+	"semgrep":  true,
+	"gitleaks": true,
+}
+
+// MaxTemplateSize is the maximum allowed size for a single template (1MB).
+const MaxTemplateSize = 1024 * 1024
+
+// MaxTemplateNameLength is the maximum allowed length for template names.
+const MaxTemplateNameLength = 128
+
+// ValidateTemplate validates an embedded template for security issues.
+// It checks for path traversal, valid template types, and size limits.
+func ValidateTemplate(tpl *EmbeddedTemplate) error {
+	if tpl == nil {
+		return fmt.Errorf("template is nil")
+	}
+
+	// Validate ID
+	if tpl.ID == "" {
+		return fmt.Errorf("template ID is required")
+	}
+
+	// Validate Name - check for path traversal
+	if tpl.Name == "" {
+		return fmt.Errorf("template name is required")
+	}
+	if len(tpl.Name) > MaxTemplateNameLength {
+		return fmt.Errorf("template name too long: max %d characters", MaxTemplateNameLength)
+	}
+
+	// SECURITY: Prevent path traversal by ensuring name is just a filename
+	baseName := filepath.Base(tpl.Name)
+	if baseName != tpl.Name || baseName == "." || baseName == ".." {
+		return fmt.Errorf("invalid template name: path traversal not allowed")
+	}
+
+	// Check for hidden files (starting with .)
+	if len(baseName) > 0 && baseName[0] == '.' {
+		return fmt.Errorf("invalid template name: hidden files not allowed")
+	}
+
+	// Validate template type
+	if !ValidTemplateTypes[tpl.TemplateType] {
+		return fmt.Errorf("invalid template type: %s (allowed: nuclei, semgrep, gitleaks)", tpl.TemplateType)
+	}
+
+	// Validate content size
+	if len(tpl.Content) > MaxTemplateSize {
+		return fmt.Errorf("template content too large: max %d bytes", MaxTemplateSize)
+	}
+
+	return nil
+}
+
 // CollectCommandPayload is the payload for collect commands.
 type CollectCommandPayload struct {
 	Collector    string                 `json:"collector"`
@@ -447,9 +504,28 @@ func (e *DefaultCommandExecutor) executeScan(ctx context.Context, cmd *Command) 
 	return result, nil
 }
 
+// MaxTemplatesPerCommand is the maximum number of templates allowed per command.
+const MaxTemplatesPerCommand = 50
+
 // writeCustomTemplates writes embedded templates to a temp directory.
 // Returns the temp directory path and a cleanup function.
+// SECURITY: This function validates all templates before writing to prevent:
+// - Path traversal attacks via malicious template names
+// - Oversized templates that could exhaust disk space
+// - Invalid template types
 func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templates []EmbeddedTemplate) (string, func(), error) {
+	// SECURITY: Limit number of templates to prevent resource exhaustion
+	if len(templates) > MaxTemplatesPerCommand {
+		return "", nil, fmt.Errorf("too many templates: max %d allowed, got %d", MaxTemplatesPerCommand, len(templates))
+	}
+
+	// SECURITY: Validate all templates BEFORE creating temp directory
+	for i := range templates {
+		if err := ValidateTemplate(&templates[i]); err != nil {
+			return "", nil, fmt.Errorf("invalid template at index %d: %w", i, err)
+		}
+	}
+
 	// Create temp directory for templates
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("rediver-templates-%s-*", scannerName))
 	if err != nil {
@@ -460,9 +536,12 @@ func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templa
 		os.RemoveAll(tmpDir)
 	}
 
+	// Track written filenames to detect duplicates
+	writtenNames := make(map[string]bool)
+
 	// Write each template to the temp directory
 	for _, tpl := range templates {
-		// Verify content hash if provided
+		// Verify content hash if provided (mandatory for integrity)
 		if tpl.ContentHash != "" {
 			hash := sha256.Sum256([]byte(tpl.Content))
 			computedHash := hex.EncodeToString(hash[:])
@@ -478,14 +557,34 @@ func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templa
 			ext = ".toml"
 		}
 
-		// Use template name as filename, ensure it has correct extension
-		filename := tpl.Name
+		// SECURITY: Use filepath.Base to ensure we only have filename, no directory components
+		// This prevents path traversal even if validation was somehow bypassed
+		filename := filepath.Base(tpl.Name)
+		if filename == "." || filename == ".." || filename == "" {
+			cleanup()
+			return "", nil, fmt.Errorf("invalid template filename: %s", tpl.Name)
+		}
+
+		// Add extension if missing
 		if filepath.Ext(filename) == "" {
 			filename += ext
 		}
 
-		// Write template content to file
+		// SECURITY: Check for duplicate filenames (could indicate attack)
+		if writtenNames[filename] {
+			cleanup()
+			return "", nil, fmt.Errorf("duplicate template filename: %s", filename)
+		}
+		writtenNames[filename] = true
+
+		// SECURITY: Construct path and verify it's still within tmpDir
 		filePath := filepath.Join(tmpDir, filename)
+		if !isSubPath(tmpDir, filePath) {
+			cleanup()
+			return "", nil, fmt.Errorf("template path escape detected: %s", filename)
+		}
+
+		// Write template content to file with restrictive permissions
 		if err := os.WriteFile(filePath, []byte(tpl.Content), 0600); err != nil {
 			cleanup()
 			return "", nil, fmt.Errorf("write template %s: %w", tpl.Name, err)
@@ -497,6 +596,26 @@ func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templa
 	}
 
 	return tmpDir, cleanup, nil
+}
+
+// isSubPath checks if child is under parent directory.
+// SECURITY: Used to prevent path traversal after filepath.Join.
+func isSubPath(parent, child string) bool {
+	parentAbs, err := filepath.Abs(parent)
+	if err != nil {
+		return false
+	}
+	childAbs, err := filepath.Abs(child)
+	if err != nil {
+		return false
+	}
+
+	// Ensure parent ends with separator for accurate prefix matching
+	if !os.IsPathSeparator(parentAbs[len(parentAbs)-1]) {
+		parentAbs += string(os.PathSeparator)
+	}
+
+	return len(childAbs) > len(parentAbs) && childAbs[:len(parentAbs)] == parentAbs
 }
 
 func (e *DefaultCommandExecutor) executeCollect(ctx context.Context, cmd *Command) (*CommandExecutionResult, error) {

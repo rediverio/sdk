@@ -10,6 +10,11 @@ import (
 	"github.com/rediverio/sdk/pkg/core"
 	"github.com/rediverio/sdk/pkg/scanners/gitleaks"
 	"github.com/rediverio/sdk/pkg/scanners/nuclei"
+	"github.com/rediverio/sdk/pkg/scanners/recon/dnsx"
+	"github.com/rediverio/sdk/pkg/scanners/recon/httpx"
+	"github.com/rediverio/sdk/pkg/scanners/recon/katana"
+	"github.com/rediverio/sdk/pkg/scanners/recon/naabu"
+	"github.com/rediverio/sdk/pkg/scanners/recon/subfinder"
 	"github.com/rediverio/sdk/pkg/scanners/semgrep"
 	"github.com/rediverio/sdk/pkg/scanners/trivy"
 )
@@ -23,6 +28,7 @@ type Registry struct {
 	secretScanners map[string]core.SecretScanner
 	sastScanners   map[string]core.Scanner
 	scaScanners    map[string]core.ScaScanner
+	reconScanners  map[string]core.ReconScanner
 	mu             sync.RWMutex
 }
 
@@ -32,6 +38,7 @@ func NewRegistry() *Registry {
 		secretScanners: make(map[string]core.SecretScanner),
 		sastScanners:   make(map[string]core.Scanner),
 		scaScanners:    make(map[string]core.ScaScanner),
+		reconScanners:  make(map[string]core.ReconScanner),
 	}
 
 	// Register built-in scanners
@@ -39,6 +46,13 @@ func NewRegistry() *Registry {
 	registry.RegisterSASTScanner(semgrep.NewScanner())
 	// Trivy is registered via preset functions, not as ScaScanner
 	// because it implements the general Scanner interface
+
+	// Register built-in recon scanners
+	registry.RegisterReconScanner(subfinder.NewScanner())
+	registry.RegisterReconScanner(dnsx.NewScanner())
+	registry.RegisterReconScanner(naabu.NewScanner())
+	registry.RegisterReconScanner(httpx.NewScanner())
+	registry.RegisterReconScanner(katana.NewScanner())
 
 	return registry
 }
@@ -116,6 +130,32 @@ func (r *Registry) ListSCAScanners() []string {
 
 	names := make([]string, 0, len(r.scaScanners))
 	for name := range r.scaScanners {
+		names = append(names, name)
+	}
+	return names
+}
+
+// RegisterReconScanner adds a recon scanner to the registry.
+func (r *Registry) RegisterReconScanner(scanner core.ReconScanner) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reconScanners[scanner.Name()] = scanner
+}
+
+// GetReconScanner returns a recon scanner by name.
+func (r *Registry) GetReconScanner(name string) core.ReconScanner {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.reconScanners[name]
+}
+
+// ListReconScanners returns all registered recon scanner names.
+func (r *Registry) ListReconScanners() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	names := make([]string, 0, len(r.reconScanners))
+	for name := range r.reconScanners {
 		names = append(names, name)
 	}
 	return names
@@ -407,4 +447,324 @@ func MustBeInstalled(ctx context.Context, scanner interface {
 	if !installed {
 		panic(fmt.Sprintf("%s is not installed", scanner.Name()))
 	}
+}
+
+// =============================================================================
+// Recon Scanner Presets - Ready-to-use recon scanner instances
+// =============================================================================
+
+// SubfinderScanner is a type alias for external package access.
+type SubfinderScanner = subfinder.Scanner
+
+// Subfinder returns a new subfinder scanner with default configuration.
+func Subfinder() *subfinder.Scanner {
+	return subfinder.NewScanner()
+}
+
+// SubfinderPassive returns a subfinder scanner configured for passive enumeration.
+func SubfinderPassive() *subfinder.Scanner {
+	return subfinder.NewPassiveScanner()
+}
+
+// SubfinderAggressive returns a subfinder scanner using all sources.
+func SubfinderAggressive() *subfinder.Scanner {
+	return subfinder.NewAggressiveScanner()
+}
+
+// SubfinderWithConfig returns a subfinder scanner with custom configuration.
+func SubfinderWithConfig(opts SubfinderOptions) *subfinder.Scanner {
+	scanner := subfinder.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Threads > 0 {
+		scanner.Threads = opts.Threads
+	}
+	if len(opts.Sources) > 0 {
+		scanner.Sources = opts.Sources
+	}
+	if len(opts.ExcludeSources) > 0 {
+		scanner.ExcludeSources = opts.ExcludeSources
+	}
+	if len(opts.Resolvers) > 0 {
+		scanner.Resolvers = opts.Resolvers
+	}
+	scanner.All = opts.All
+	scanner.Recursive = opts.Recursive
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// SubfinderOptions configures the subfinder scanner.
+type SubfinderOptions struct {
+	Binary         string        // Path to subfinder binary
+	Timeout        time.Duration // Scan timeout
+	Threads        int           // Concurrency level
+	Sources        []string      // Sources to use
+	ExcludeSources []string      // Sources to exclude
+	Resolvers      []string      // Custom DNS resolvers
+	All            bool          // Use all sources
+	Recursive      bool          // Enable recursive enumeration
+	Verbose        bool          // Enable verbose output
+}
+
+// DNSXScanner is a type alias for external package access.
+type DNSXScanner = dnsx.Scanner
+
+// DNSX returns a new dnsx scanner with default configuration.
+func DNSX() *dnsx.Scanner {
+	return dnsx.NewScanner()
+}
+
+// DNSXARecord returns a dnsx scanner for A/AAAA records only.
+func DNSXARecord() *dnsx.Scanner {
+	return dnsx.NewARecordScanner()
+}
+
+// DNSXFull returns a dnsx scanner for all DNS record types.
+func DNSXFull() *dnsx.Scanner {
+	return dnsx.NewFullRecordScanner()
+}
+
+// DNSXWithConfig returns a dnsx scanner with custom configuration.
+func DNSXWithConfig(opts DNSXOptions) *dnsx.Scanner {
+	scanner := dnsx.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Threads > 0 {
+		scanner.Threads = opts.Threads
+	}
+	if opts.Retries > 0 {
+		scanner.Retries = opts.Retries
+	}
+	if len(opts.Resolvers) > 0 {
+		scanner.Resolvers = opts.Resolvers
+	}
+	if len(opts.RecordTypes) > 0 {
+		scanner.RecordTypes = opts.RecordTypes
+	}
+	scanner.QueryAll = opts.QueryAll
+	scanner.ResponseOnly = opts.ResponseOnly
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// DNSXOptions configures the dnsx scanner.
+type DNSXOptions struct {
+	Binary       string        // Path to dnsx binary
+	Timeout      time.Duration // Scan timeout
+	Threads      int           // Concurrency level
+	Retries      int           // Number of retries
+	Resolvers    []string      // Custom DNS resolvers
+	RecordTypes  []string      // DNS record types to query
+	QueryAll     bool          // Query all record types
+	ResponseOnly bool          // Output only response values
+	Verbose      bool          // Enable verbose output
+}
+
+// NaabuScanner is a type alias for external package access.
+type NaabuScanner = naabu.Scanner
+
+// Naabu returns a new naabu scanner with default configuration.
+func Naabu() *naabu.Scanner {
+	return naabu.NewScanner()
+}
+
+// NaabuTop100 returns a naabu scanner for top 100 ports.
+func NaabuTop100() *naabu.Scanner {
+	return naabu.NewTop100Scanner()
+}
+
+// NaabuTop1000 returns a naabu scanner for top 1000 ports.
+func NaabuTop1000() *naabu.Scanner {
+	return naabu.NewTop1000Scanner()
+}
+
+// NaabuFull returns a naabu scanner for all 65535 ports.
+func NaabuFull() *naabu.Scanner {
+	return naabu.NewFullScanner()
+}
+
+// NaabuWeb returns a naabu scanner for common web ports.
+func NaabuWeb() *naabu.Scanner {
+	return naabu.NewWebScanner()
+}
+
+// NaabuWithConfig returns a naabu scanner with custom configuration.
+func NaabuWithConfig(opts NaabuOptions) *naabu.Scanner {
+	scanner := naabu.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Rate > 0 {
+		scanner.Rate = opts.Rate
+	}
+	if opts.Retries > 0 {
+		scanner.Retries = opts.Retries
+	}
+	if opts.Ports != "" {
+		scanner.Ports = opts.Ports
+	}
+	if opts.ScanType != "" {
+		scanner.ScanType = naabu.ScanType(opts.ScanType)
+	}
+	scanner.SkipHostDiscovery = opts.SkipHostDiscovery
+	scanner.ServiceVersion = opts.ServiceVersion
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// NaabuOptions configures the naabu scanner.
+type NaabuOptions struct {
+	Binary            string        // Path to naabu binary
+	Timeout           time.Duration // Scan timeout
+	Rate              int           // Packets per second
+	Retries           int           // Number of retries
+	Ports             string        // Ports to scan
+	ScanType          string        // Scan type: s (SYN), c (Connect)
+	SkipHostDiscovery bool          // Skip host discovery
+	ServiceVersion    bool          // Probe for service versions
+	Verbose           bool          // Enable verbose output
+}
+
+// HTTPXScanner is a type alias for external package access.
+type HTTPXScanner = httpx.Scanner
+
+// HTTPX returns a new httpx scanner with default configuration.
+func HTTPX() *httpx.Scanner {
+	return httpx.NewScanner()
+}
+
+// HTTPXBasic returns a basic httpx prober for availability checks.
+func HTTPXBasic() *httpx.Scanner {
+	return httpx.NewBasicProber()
+}
+
+// HTTPXFull returns a comprehensive httpx prober with all features.
+func HTTPXFull() *httpx.Scanner {
+	return httpx.NewFullProber()
+}
+
+// HTTPXTech returns an httpx scanner focused on technology detection.
+func HTTPXTech() *httpx.Scanner {
+	return httpx.NewTechDetector()
+}
+
+// HTTPXWithConfig returns an httpx scanner with custom configuration.
+func HTTPXWithConfig(opts HTTPXOptions) *httpx.Scanner {
+	scanner := httpx.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Threads > 0 {
+		scanner.Threads = opts.Threads
+	}
+	if opts.RateLimit > 0 {
+		scanner.RateLimit = opts.RateLimit
+	}
+	scanner.FollowRedirects = opts.FollowRedirects
+	if opts.MaxRedirects > 0 {
+		scanner.MaxRedirects = opts.MaxRedirects
+	}
+	scanner.TechDetect = opts.TechDetect
+	scanner.StatusCode = opts.StatusCode
+	scanner.Title = opts.Title
+	scanner.WebServer = opts.WebServer
+	scanner.CDN = opts.CDN
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// HTTPXOptions configures the httpx scanner.
+type HTTPXOptions struct {
+	Binary          string        // Path to httpx binary
+	Timeout         time.Duration // Scan timeout
+	Threads         int           // Concurrency level
+	RateLimit       int           // Rate limit per second
+	FollowRedirects bool          // Follow HTTP redirects
+	MaxRedirects    int           // Maximum redirects to follow
+	TechDetect      bool          // Technology detection
+	StatusCode      bool          // Extract status code
+	Title           bool          // Extract page title
+	WebServer       bool          // Extract web server
+	CDN             bool          // CDN detection
+	Verbose         bool          // Enable verbose output
+}
+
+// KatanaScanner is a type alias for external package access.
+type KatanaScanner = katana.Scanner
+
+// Katana returns a new katana scanner with default configuration.
+func Katana() *katana.Scanner {
+	return katana.NewScanner()
+}
+
+// KatanaBasic returns a basic katana crawler for quick discovery.
+func KatanaBasic() *katana.Scanner {
+	return katana.NewBasicCrawler()
+}
+
+// KatanaDeep returns a comprehensive katana crawler for thorough discovery.
+func KatanaDeep() *katana.Scanner {
+	return katana.NewDeepCrawler()
+}
+
+// KatanaHeadless returns a katana crawler with headless browser support.
+func KatanaHeadless() *katana.Scanner {
+	return katana.NewHeadlessCrawler()
+}
+
+// KatanaWithConfig returns a katana scanner with custom configuration.
+func KatanaWithConfig(opts KatanaOptions) *katana.Scanner {
+	scanner := katana.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Concurrency > 0 {
+		scanner.Concurrency = opts.Concurrency
+	}
+	if opts.Depth > 0 {
+		scanner.Depth = opts.Depth
+	}
+	if opts.RateLimit > 0 {
+		scanner.RateLimit = opts.RateLimit
+	}
+	scanner.JSCrawl = opts.JSCrawl
+	scanner.FormFill = opts.FormFill
+	scanner.Headless = opts.Headless
+	if opts.Scope != "" {
+		scanner.Scope = katana.ScopeType(opts.Scope)
+	}
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// KatanaOptions configures the katana scanner.
+type KatanaOptions struct {
+	Binary      string        // Path to katana binary
+	Timeout     time.Duration // Scan timeout
+	Concurrency int           // Concurrency level
+	Depth       int           // Maximum crawl depth
+	RateLimit   int           // Rate limit per second
+	JSCrawl     bool          // Enable JavaScript crawling
+	FormFill    bool          // Enable form filling
+	Headless    bool          // Enable headless browser
+	Scope       string        // Scope constraint: dn, rdn, fqdn
+	Verbose     bool          // Enable verbose output
 }
