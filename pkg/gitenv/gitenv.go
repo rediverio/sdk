@@ -88,7 +88,7 @@ func (m *ManualEnv) ProjectURL() string  { return m.repoURL }
 func (m *ManualEnv) BlobURL() string     { return "" }
 
 // CanonicalRepoName returns the repo URL as-is for manual environments.
-func (m *ManualEnv) CanonicalRepoName() string { return m.repoURL }
+func (m *ManualEnv) CanonicalRepoName() string               { return m.repoURL }
 func (m *ManualEnv) CommitSha() string                       { return m.commitSha }
 func (m *ManualEnv) CommitBranch() string                    { return m.branch }
 func (m *ManualEnv) CommitTitle() string                     { return "" }

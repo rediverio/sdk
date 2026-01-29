@@ -79,6 +79,7 @@ func (g *GitLabEnv) ProjectName() string {
 // Examples:
 //   - gitlab.com/myorg/myrepo
 //   - gitlab.mycompany.com/team/project
+//
 // This ensures unique asset identification across different Git providers.
 func (g *GitLabEnv) CanonicalRepoName() string {
 	// CI_PROJECT_PATH is namespace/project (e.g., "myorg/myrepo")

@@ -476,8 +476,9 @@ func (c *DiskCheck) Check(ctx context.Context) CheckResult {
 	}
 
 	// Calculate disk usage
-	totalBytes := stat.Blocks * uint64(stat.Bsize)
-	freeBytes := stat.Bavail * uint64(stat.Bsize)
+	// Bsize is always positive on supported platforms (Linux/Unix)
+	totalBytes := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // G115: safe conversion
+	freeBytes := stat.Bavail * uint64(stat.Bsize)  //nolint:gosec // G115: safe conversion
 	usedBytes := totalBytes - freeBytes
 	freePercent := float64(freeBytes) / float64(totalBytes) * 100
 
