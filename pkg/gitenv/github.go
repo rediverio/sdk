@@ -102,6 +102,28 @@ func (g *GitHubEnv) ProjectName() string {
 	return os.Getenv("GITHUB_REPOSITORY")
 }
 
+// CanonicalRepoName returns the full canonical repository name including domain.
+// Format: github.com/{owner}/{repo} (or custom domain for GitHub Enterprise)
+// This ensures unique asset identification across different Git providers.
+func (g *GitHubEnv) CanonicalRepoName() string {
+	serverURL := os.Getenv("GITHUB_SERVER_URL")
+	repo := os.Getenv("GITHUB_REPOSITORY")
+	if repo == "" {
+		return ""
+	}
+
+	// Extract domain from server URL
+	domain := "github.com"
+	if serverURL != "" {
+		// Remove protocol prefix
+		domain = strings.TrimPrefix(serverURL, "https://")
+		domain = strings.TrimPrefix(domain, "http://")
+		domain = strings.TrimSuffix(domain, "/")
+	}
+
+	return fmt.Sprintf("%s/%s", domain, repo)
+}
+
 // ProjectURL returns the repository URL.
 func (g *GitHubEnv) ProjectURL() string {
 	serverURL := os.Getenv("GITHUB_SERVER_URL")

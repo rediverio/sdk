@@ -74,6 +74,28 @@ func (g *GitLabEnv) ProjectName() string {
 	return os.Getenv("CI_PROJECT_NAME")
 }
 
+// CanonicalRepoName returns the full canonical repository name including domain.
+// Format: {domain}/{namespace}/{project}
+// Examples:
+//   - gitlab.com/myorg/myrepo
+//   - gitlab.mycompany.com/team/project
+// This ensures unique asset identification across different Git providers.
+func (g *GitLabEnv) CanonicalRepoName() string {
+	// CI_PROJECT_PATH is namespace/project (e.g., "myorg/myrepo")
+	projectPath := os.Getenv("CI_PROJECT_PATH")
+	if projectPath == "" {
+		return ""
+	}
+
+	// CI_SERVER_HOST is the GitLab server domain (e.g., "gitlab.com" or "gitlab.mycompany.com")
+	serverHost := os.Getenv("CI_SERVER_HOST")
+	if serverHost == "" {
+		serverHost = "gitlab.com"
+	}
+
+	return fmt.Sprintf("%s/%s", serverHost, projectPath)
+}
+
 // ProjectURL returns the project URL.
 func (g *GitLabEnv) ProjectURL() string {
 	return os.Getenv("CI_PROJECT_URL")

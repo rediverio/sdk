@@ -25,6 +25,14 @@ type GitEnv interface {
 	ProjectURL() string
 	BlobURL() string
 
+	// CanonicalRepoName returns the full canonical repository name including the provider domain.
+	// Format: {domain}/{owner}/{repo}
+	// Examples:
+	//   - github.com/rediverio/api
+	//   - gitlab.com/myorg/myrepo
+	// This ensures unique asset identification across different Git providers.
+	CanonicalRepoName() string
+
 	// Commit info
 	CommitSha() string
 	CommitBranch() string
@@ -72,12 +80,15 @@ func NewManualEnv(repoURL, branch, commitSha string) *ManualEnv {
 	}
 }
 
-func (m *ManualEnv) Provider() string                        { return ProviderManual }
-func (m *ManualEnv) IsActive() bool                          { return true }
-func (m *ManualEnv) ProjectID() string                       { return m.projectID }
-func (m *ManualEnv) ProjectName() string                     { return m.repoURL }
-func (m *ManualEnv) ProjectURL() string                      { return m.repoURL }
-func (m *ManualEnv) BlobURL() string                         { return "" }
+func (m *ManualEnv) Provider() string    { return ProviderManual }
+func (m *ManualEnv) IsActive() bool      { return true }
+func (m *ManualEnv) ProjectID() string   { return m.projectID }
+func (m *ManualEnv) ProjectName() string { return m.repoURL }
+func (m *ManualEnv) ProjectURL() string  { return m.repoURL }
+func (m *ManualEnv) BlobURL() string     { return "" }
+
+// CanonicalRepoName returns the repo URL as-is for manual environments.
+func (m *ManualEnv) CanonicalRepoName() string { return m.repoURL }
 func (m *ManualEnv) CommitSha() string                       { return m.commitSha }
 func (m *ManualEnv) CommitBranch() string                    { return m.branch }
 func (m *ManualEnv) CommitTitle() string                     { return "" }
