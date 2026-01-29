@@ -1107,15 +1107,45 @@ const (
 )
 
 // DataFlow represents taint analysis data flow trace.
+// This structure captures the complete path from source to sink,
+// including all intermediate steps and transformations.
 type DataFlow struct {
-	// Taint source locations
+	// Taint source locations (where untrusted data enters)
 	Sources []DataFlowLocation `json:"sources,omitempty"`
 
 	// Intermediate variable locations (propagation path)
 	Intermediates []DataFlowLocation `json:"intermediates,omitempty"`
 
-	// Taint sink location
+	// Taint sink location (where data reaches dangerous function)
 	Sinks []DataFlowLocation `json:"sinks,omitempty"`
+
+	// Sanitizers applied (functions that clean/escape data)
+	Sanitizers []DataFlowLocation `json:"sanitizers,omitempty"`
+
+	// Whether the data is still tainted at the sink
+	// (false if properly sanitized before reaching sink)
+	Tainted bool `json:"tainted"`
+
+	// Type of taint: user_input, file_read, env_var, network, database
+	TaintType string `json:"taint_type,omitempty"`
+
+	// Vulnerability type this flow leads to: sqli, xss, ssrf, command_injection, etc.
+	VulnerabilityType string `json:"vulnerability_type,omitempty"`
+
+	// Flow confidence score (0-100)
+	Confidence int `json:"confidence,omitempty"`
+
+	// Is interprocedural (crosses function boundaries)
+	Interprocedural bool `json:"interprocedural,omitempty"`
+
+	// Is cross-file (data flows across multiple files)
+	CrossFile bool `json:"cross_file,omitempty"`
+
+	// Call graph path (function names in order)
+	CallPath []string `json:"call_path,omitempty"`
+
+	// Summary of the flow for human readability
+	Summary string `json:"summary,omitempty"`
 }
 
 // DataFlowLocation represents a location in a data flow trace.
@@ -1123,11 +1153,17 @@ type DataFlowLocation struct {
 	// File path
 	Path string `json:"path,omitempty"`
 
-	// Line number
+	// Line number (1-indexed)
 	Line int `json:"line,omitempty"`
 
-	// Column number
+	// End line (for multi-line spans)
+	EndLine int `json:"end_line,omitempty"`
+
+	// Column number (1-indexed)
 	Column int `json:"column,omitempty"`
+
+	// End column
+	EndColumn int `json:"end_column,omitempty"`
 
 	// Code content at this location
 	Content string `json:"content,omitempty"`
@@ -1135,9 +1171,59 @@ type DataFlowLocation struct {
 	// Variable or expression name
 	Label string `json:"label,omitempty"`
 
-	// Step index in the flow (for ordering)
+	// Step index in the flow (for ordering, 0-indexed)
 	Index int `json:"index,omitempty"`
+
+	// Location type: source, sink, propagator, sanitizer, transform
+	Type DataFlowLocationType `json:"type,omitempty"`
+
+	// Function/method name containing this location
+	Function string `json:"function,omitempty"`
+
+	// Class/struct name (if applicable)
+	Class string `json:"class,omitempty"`
+
+	// Module/namespace
+	Module string `json:"module,omitempty"`
+
+	// The operation performed: assignment, call, return, parameter, concat, etc.
+	Operation string `json:"operation,omitempty"`
+
+	// For function calls: the function being called
+	CalledFunction string `json:"called_function,omitempty"`
+
+	// For parameters: the parameter index (0-indexed)
+	ParameterIndex int `json:"parameter_index,omitempty"`
+
+	// Taint state at this location: tainted, sanitized, unknown
+	TaintState string `json:"taint_state,omitempty"`
+
+	// Transformation applied: encode, decode, escape, hash, encrypt, etc.
+	Transformation string `json:"transformation,omitempty"`
+
+	// Notes for human understanding
+	Notes string `json:"notes,omitempty"`
 }
+
+// DataFlowLocationType represents the type of a location in dataflow.
+type DataFlowLocationType string
+
+const (
+	// DataFlowLocationSource is where untrusted data enters the system
+	DataFlowLocationSource DataFlowLocationType = "source"
+
+	// DataFlowLocationSink is where data reaches a dangerous function
+	DataFlowLocationSink DataFlowLocationType = "sink"
+
+	// DataFlowLocationPropagator is where data is passed/assigned
+	DataFlowLocationPropagator DataFlowLocationType = "propagator"
+
+	// DataFlowLocationSanitizer is where data is cleaned/escaped
+	DataFlowLocationSanitizer DataFlowLocationType = "sanitizer"
+
+	// DataFlowLocationTransform is where data is transformed (not sanitized)
+	DataFlowLocationTransform DataFlowLocationType = "transform"
+)
 
 // StackTrace represents a call stack trace (SARIF stack).
 type StackTrace struct {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rediverio/sdk/pkg/core"
+	"github.com/rediverio/sdk/pkg/scanners/codeql"
 	"github.com/rediverio/sdk/pkg/scanners/gitleaks"
 	"github.com/rediverio/sdk/pkg/scanners/nuclei"
 	"github.com/rediverio/sdk/pkg/scanners/recon/dnsx"
@@ -258,6 +259,94 @@ type SemgrepOptions struct {
 	MaxMemory     int           // Max memory in MB (0 = no limit)
 	Jobs          int           // Number of parallel jobs (0 = auto)
 	NoGitIgnore   bool          // Don't respect .gitignore
+}
+
+// =============================================================================
+// CodeQL Scanner - Full dataflow analysis
+// =============================================================================
+
+// CodeQLScanner is a type alias for external package access.
+type CodeQLScanner = codeql.Scanner
+
+// CodeQL returns a new CodeQL scanner with default configuration.
+// Note: Language must be set before scanning.
+func CodeQL() *codeql.Scanner {
+	return codeql.NewScanner()
+}
+
+// CodeQLGo returns a CodeQL scanner configured for Go analysis.
+func CodeQLGo() *codeql.Scanner {
+	return codeql.NewSecurityScanner(codeql.LanguageGo)
+}
+
+// CodeQLJava returns a CodeQL scanner configured for Java analysis.
+func CodeQLJava() *codeql.Scanner {
+	return codeql.NewSecurityScanner(codeql.LanguageJava)
+}
+
+// CodeQLJavaScript returns a CodeQL scanner configured for JavaScript/TypeScript analysis.
+func CodeQLJavaScript() *codeql.Scanner {
+	return codeql.NewSecurityScanner(codeql.LanguageJavaScript)
+}
+
+// CodeQLPython returns a CodeQL scanner configured for Python analysis.
+func CodeQLPython() *codeql.Scanner {
+	return codeql.NewSecurityScanner(codeql.LanguagePython)
+}
+
+// CodeQLCPP returns a CodeQL scanner configured for C/C++ analysis.
+func CodeQLCPP() *codeql.Scanner {
+	return codeql.NewSecurityScanner(codeql.LanguageCPP)
+}
+
+// CodeQLWithConfig returns a CodeQL scanner with custom configuration.
+func CodeQLWithConfig(opts CodeQLOptions) *codeql.Scanner {
+	scanner := codeql.NewScanner()
+	if opts.Binary != "" {
+		scanner.Binary = opts.Binary
+	}
+	if opts.OutputFile != "" {
+		scanner.OutputFile = opts.OutputFile
+	}
+	if opts.Timeout > 0 {
+		scanner.Timeout = opts.Timeout
+	}
+	if opts.Language != "" {
+		scanner.Language = codeql.Language(opts.Language)
+	}
+	if opts.DatabasePath != "" {
+		scanner.DatabasePath = opts.DatabasePath
+	}
+	if len(opts.QueryPacks) > 0 {
+		scanner.QueryPacks = opts.QueryPacks
+	}
+	if len(opts.QueryFiles) > 0 {
+		scanner.QueryFiles = opts.QueryFiles
+	}
+	if opts.Threads > 0 {
+		scanner.Threads = opts.Threads
+	}
+	if opts.RAMPerThread > 0 {
+		scanner.RAMPerThread = opts.RAMPerThread
+	}
+	scanner.SkipDBCreation = opts.SkipDBCreation
+	scanner.Verbose = opts.Verbose
+	return scanner
+}
+
+// CodeQLOptions configures the CodeQL scanner.
+type CodeQLOptions struct {
+	Binary         string        // Path to codeql binary
+	OutputFile     string        // Output file path
+	Timeout        time.Duration // Scan timeout
+	Verbose        bool          // Enable verbose output
+	Language       string        // Target language: go, java, javascript, python, cpp, csharp, ruby, swift
+	DatabasePath   string        // Path to CodeQL database (optional)
+	QueryPacks     []string      // Query packs to use (default: security-extended)
+	QueryFiles     []string      // Specific .ql files to run
+	Threads        int           // Number of threads (0 = auto)
+	RAMPerThread   int           // RAM per thread in MB (0 = default)
+	SkipDBCreation bool          // Skip database creation (use existing)
 }
 
 // TrivyScanner is a type alias for external package access.
