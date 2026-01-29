@@ -69,12 +69,9 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 		Capabilities: p.inferCapabilities(&trivyReport),
 	}
 
-	// Parse artifact as asset if available
-	if trivyReport.ArtifactName != "" {
-		asset := p.parseArtifactAsAsset(&trivyReport, opts)
-		if asset != nil {
-			report.Assets = append(report.Assets, *asset)
-		}
+	// Create asset from options, branch info, or artifact
+	if asset := p.createAssetFromContext(&trivyReport, opts); asset != nil {
+		report.Assets = append(report.Assets, *asset)
 	}
 
 	// Parse results
@@ -109,6 +106,74 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 	}
 
 	return report, nil
+}
+
+// createAssetFromContext creates an asset from options, branch info, or Trivy artifact.
+// Priority: opts.AssetValue > opts.BranchInfo.RepositoryURL > ArtifactName
+func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions) *ris.Asset {
+	assetID := "asset-1"
+	if opts != nil && opts.AssetID != "" {
+		assetID = opts.AssetID
+	}
+
+	// Priority 1: Explicit AssetValue from options
+	if opts != nil && opts.AssetValue != "" {
+		assetType := opts.AssetType
+		if assetType == "" {
+			assetType = ris.AssetTypeRepository
+		}
+		asset := &ris.Asset{
+			ID:          assetID,
+			Type:        assetType,
+			Value:       opts.AssetValue,
+			Name:        opts.AssetValue,
+			Criticality: ris.CriticalityHigh,
+			Properties: ris.Properties{
+				"source": "parse_options",
+			},
+		}
+		// Add OS metadata if available
+		if report.Metadata.OS != nil {
+			asset.Tags = append(asset.Tags, report.Metadata.OS.Family)
+		}
+		return asset
+	}
+
+	// Priority 2: BranchInfo.RepositoryURL
+	if opts != nil && opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
+		props := ris.Properties{
+			"source":       "branch_info",
+			"auto_created": true,
+		}
+		if opts.BranchInfo.CommitSHA != "" {
+			props["commit_sha"] = opts.BranchInfo.CommitSHA
+		}
+		if opts.BranchInfo.Name != "" {
+			props["branch"] = opts.BranchInfo.Name
+		}
+		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
+
+		asset := &ris.Asset{
+			ID:          assetID,
+			Type:        ris.AssetTypeRepository,
+			Value:       opts.BranchInfo.RepositoryURL,
+			Name:        opts.BranchInfo.RepositoryURL,
+			Criticality: ris.CriticalityHigh,
+			Properties:  props,
+		}
+		// Add OS metadata if available
+		if report.Metadata.OS != nil {
+			asset.Tags = append(asset.Tags, report.Metadata.OS.Family)
+		}
+		return asset
+	}
+
+	// Priority 3: Trivy ArtifactName (existing behavior)
+	if report.ArtifactName != "" {
+		return p.parseArtifactAsAsset(report, opts)
+	}
+
+	return nil
 }
 
 // parseArtifactAsAsset converts Trivy artifact to RIS asset.
@@ -214,6 +279,11 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 		finding.Tags = append(finding.Tags, vuln.Status)
 	}
 
+	// Link to asset
+	if p.hasAssetInfo(opts) {
+		finding.AssetRef = p.getAssetID(opts)
+	}
+
 	return finding
 }
 
@@ -302,6 +372,11 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 		finding.Tags = append(finding.Tags, misconfig.CauseMetadata.Provider)
 	}
 
+	// Link to asset
+	if p.hasAssetInfo(opts) {
+		finding.AssetRef = p.getAssetID(opts)
+	}
+
 	return finding
 }
 
@@ -348,6 +423,11 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 
 	// Set tags
 	finding.Tags = []string{"secret", secret.Category}
+
+	// Link to asset
+	if p.hasAssetInfo(opts) {
+		finding.AssetRef = p.getAssetID(opts)
+	}
 
 	return finding
 }
@@ -419,6 +499,28 @@ func (p *Parser) getCVSSVersion(vector string) string {
 		return "2.0"
 	}
 	return ""
+}
+
+// getAssetID returns the asset ID from options or a default.
+func (p *Parser) getAssetID(opts *core.ParseOptions) string {
+	if opts != nil && opts.AssetID != "" {
+		return opts.AssetID
+	}
+	return "asset-1"
+}
+
+// hasAssetInfo checks if we have any asset information in options.
+func (p *Parser) hasAssetInfo(opts *core.ParseOptions) bool {
+	if opts == nil {
+		return false
+	}
+	if opts.AssetValue != "" {
+		return true
+	}
+	if opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
+		return true
+	}
+	return false
 }
 
 // inferCapabilities infers tool capabilities from report.

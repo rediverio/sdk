@@ -58,18 +58,9 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 		report.Tool.Version = semgrepReport.Version
 	}
 
-	// Add asset if configured
-	if opts != nil && opts.AssetValue != "" {
-		assetID := opts.AssetID
-		if assetID == "" {
-			assetID = "asset-1"
-		}
-		report.Assets = append(report.Assets, ris.Asset{
-			ID:          assetID,
-			Type:        opts.AssetType,
-			Value:       opts.AssetValue,
-			Criticality: ris.CriticalityHigh,
-		})
+	// Add asset from options or branch info
+	if asset := p.createAssetFromOptions(opts); asset != nil {
+		report.Assets = append(report.Assets, *asset)
 	}
 
 	// Convert findings
@@ -167,13 +158,16 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 		}
 	}
 
-	// Link to asset
-	if opts != nil && opts.AssetValue != "" {
+	// Link to asset (from AssetValue or BranchInfo)
+	if opts != nil {
 		assetID := opts.AssetID
 		if assetID == "" {
 			assetID = "asset-1"
 		}
-		finding.AssetRef = assetID
+		// Link if we have asset info (either explicit or from branch info)
+		if opts.AssetValue != "" || (opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "") {
+			finding.AssetRef = assetID
+		}
 	}
 
 	return finding
@@ -226,6 +220,63 @@ func (p *Parser) convertDataFlow(df *DataFlow) *ris.DataFlow {
 	}
 
 	return result
+}
+
+// createAssetFromOptions creates an asset from parse options or branch info.
+// Priority: opts.AssetValue > opts.BranchInfo.RepositoryURL
+func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
+	if opts == nil {
+		return nil
+	}
+
+	assetID := opts.AssetID
+	if assetID == "" {
+		assetID = "asset-1"
+	}
+
+	// Priority 1: Explicit AssetValue
+	if opts.AssetValue != "" {
+		assetType := opts.AssetType
+		if assetType == "" {
+			assetType = ris.AssetTypeRepository
+		}
+		return &ris.Asset{
+			ID:          assetID,
+			Type:        assetType,
+			Value:       opts.AssetValue,
+			Name:        opts.AssetValue,
+			Criticality: ris.CriticalityHigh,
+			Properties: ris.Properties{
+				"source": "parse_options",
+			},
+		}
+	}
+
+	// Priority 2: BranchInfo.RepositoryURL
+	if opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
+		props := ris.Properties{
+			"source":       "branch_info",
+			"auto_created": true,
+		}
+		if opts.BranchInfo.CommitSHA != "" {
+			props["commit_sha"] = opts.BranchInfo.CommitSHA
+		}
+		if opts.BranchInfo.Name != "" {
+			props["branch"] = opts.BranchInfo.Name
+		}
+		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
+
+		return &ris.Asset{
+			ID:          assetID,
+			Type:        ris.AssetTypeRepository,
+			Value:       opts.BranchInfo.RepositoryURL,
+			Name:        opts.BranchInfo.RepositoryURL,
+			Criticality: ris.CriticalityHigh,
+			Properties:  props,
+		}
+	}
+
+	return nil
 }
 
 // ParseToRIS is a convenience function to parse semgrep JSON to RIS.
