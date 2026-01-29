@@ -148,6 +148,61 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 		finding.DataFlow = a.convertCodeFlow(result.CodeFlows[0])
 	}
 
+	// Map SARIF 2.1.0 extended fields
+	finding.Kind = result.Kind
+	finding.BaselineState = result.BaselineState
+	finding.Rank = result.Rank
+	finding.OccurrenceCount = result.OccurrenceCount
+	finding.CorrelationID = result.CorrelationGuid
+	finding.PartialFingerprints = result.PartialFingerprints
+	finding.WorkItemURIs = result.WorkItemUris
+	finding.HostedViewerURI = result.HostedViewerUri
+
+	// Convert related locations
+	for _, loc := range result.RelatedLocations {
+		finding.RelatedLocations = append(finding.RelatedLocations, &ris.FindingLocation{
+			Path:        loc.PhysicalLocation.ArtifactLocation.URI,
+			StartLine:   loc.PhysicalLocation.Region.StartLine,
+			EndLine:     loc.PhysicalLocation.Region.EndLine,
+			StartColumn: loc.PhysicalLocation.Region.StartColumn,
+			EndColumn:   loc.PhysicalLocation.Region.EndColumn,
+			Snippet:     loc.PhysicalLocation.Region.Snippet.Text,
+		})
+	}
+
+	// Convert stacks
+	for _, stack := range result.Stacks {
+		st := &ris.StackTrace{
+			Message: stack.Message.Text,
+		}
+		for _, frame := range stack.Frames {
+			st.Frames = append(st.Frames, &ris.StackFrame{
+				Location: &ris.FindingLocation{
+					Path:        frame.Location.PhysicalLocation.ArtifactLocation.URI,
+					StartLine:   frame.Location.PhysicalLocation.Region.StartLine,
+					EndLine:     frame.Location.PhysicalLocation.Region.EndLine,
+					StartColumn: frame.Location.PhysicalLocation.Region.StartColumn,
+					EndColumn:   frame.Location.PhysicalLocation.Region.EndColumn,
+					Snippet:     frame.Location.PhysicalLocation.Region.Snippet.Text,
+				},
+				Module:     frame.Module,
+				ThreadID:   frame.ThreadId,
+				Parameters: frame.Parameters,
+			})
+		}
+		finding.Stacks = append(finding.Stacks, st)
+	}
+
+	// Convert attachments
+	for _, att := range result.Attachments {
+		finding.Attachments = append(finding.Attachments, &ris.Attachment{
+			Description: att.Description.Text,
+			ArtifactLocation: &ris.ArtifactLocation{
+				URI: att.ArtifactLocation.URI,
+			},
+		})
+	}
+
 	// Filter by severity if option is set
 	if opts != nil && opts.MinSeverity != "" {
 		if !meetsMinSeverity(finding.Severity, ris.Severity(opts.MinSeverity)) {
@@ -278,6 +333,19 @@ type SARIFResult struct {
 	Message   SARIFMessage    `json:"message"`
 	Locations []SARIFLocation `json:"locations"`
 	CodeFlows []SARIFCodeFlow `json:"codeFlows"`
+
+	// SARIF 2.1.0 extended fields
+	Kind                string            `json:"kind,omitempty"`                // not_applicable, pass, fail, review, open, informational
+	BaselineState       string            `json:"baselineState,omitempty"`       // new, unchanged, updated, absent
+	Rank                float64           `json:"rank,omitempty"`                // 0-100 priority score
+	OccurrenceCount     int               `json:"occurrenceCount,omitempty"`     // Number of times observed
+	CorrelationGuid     string            `json:"correlationGuid,omitempty"`     // Groups logically identical results
+	PartialFingerprints map[string]string `json:"partialFingerprints,omitempty"` // Contributing identity components
+	RelatedLocations    []SARIFLocation   `json:"relatedLocations,omitempty"`    // Additional related locations
+	Stacks              []SARIFStack      `json:"stacks,omitempty"`              // Call stacks
+	Attachments         []SARIFAttachment `json:"attachments,omitempty"`         // Artifacts or evidence
+	WorkItemUris        []string          `json:"workItemUris,omitempty"`        // Associated issues/tickets
+	HostedViewerUri     string            `json:"hostedViewerUri,omitempty"`     // URI to view in hosted viewer
 }
 
 // SARIFLocation is a location in a result.
@@ -322,5 +390,27 @@ type SARIFThreadFlow struct {
 
 // SARIFThreadFlowLocation is a location in a thread flow.
 type SARIFThreadFlowLocation struct {
-	Location SARIFLocation `json:"location"`
+	Location     SARIFLocation `json:"location"`
+	NestingLevel int           `json:"nestingLevel,omitempty"`
+	Importance   string        `json:"importance,omitempty"` // essential, important, unimportant
+}
+
+// SARIFStack represents a call stack.
+type SARIFStack struct {
+	Message SARIFMessage      `json:"message,omitempty"`
+	Frames  []SARIFStackFrame `json:"frames"`
+}
+
+// SARIFStackFrame is a single frame in a call stack.
+type SARIFStackFrame struct {
+	Location   SARIFLocation `json:"location,omitempty"`
+	Module     string        `json:"module,omitempty"`
+	ThreadId   int           `json:"threadId,omitempty"`
+	Parameters []string      `json:"parameters,omitempty"`
+}
+
+// SARIFAttachment represents an artifact or evidence attachment.
+type SARIFAttachment struct {
+	Description      SARIFMessage          `json:"description,omitempty"`
+	ArtifactLocation SARIFArtifactLocation `json:"artifactLocation,omitempty"`
 }
