@@ -1421,6 +1421,45 @@ type VulnerabilityDetails struct {
 
 	// Dependency path for transitive vulnerabilities
 	DependencyPath []string `json:"dependency_path,omitempty"`
+
+	// Data source information (vulnerability database)
+	DataSource *VulnDataSource `json:"data_source,omitempty"`
+
+	// Severity source (who assigned the severity: nvd, ghsa, redhat, etc.)
+	SeveritySource string `json:"severity_source,omitempty"`
+
+	// Vendor-specific severity mapping (vendor -> severity level 1-5)
+	VendorSeverity map[string]int `json:"vendor_severity,omitempty"`
+
+	// Container layer information (for image scans)
+	Layer *ContainerLayer `json:"layer,omitempty"`
+
+	// Aqua Vulnerability Database ID (e.g., AVD-AWS-0001)
+	AVDID string `json:"avd_id,omitempty"`
+
+	// Vulnerability status: affected, fixed, under_investigation, will_not_fix
+	VulnStatus string `json:"vuln_status,omitempty"`
+}
+
+// VulnDataSource contains information about the vulnerability data source.
+type VulnDataSource struct {
+	// Data source ID (e.g., "nvd", "ghsa", "osv")
+	ID string `json:"id,omitempty"`
+
+	// Data source name
+	Name string `json:"name,omitempty"`
+
+	// Data source URL
+	URL string `json:"url,omitempty"`
+}
+
+// ContainerLayer contains information about the container layer where a vulnerability was found.
+type ContainerLayer struct {
+	// Layer digest (e.g., "sha256:abc123...")
+	Digest string `json:"digest,omitempty"`
+
+	// Layer diff ID
+	DiffID string `json:"diff_id,omitempty"`
 }
 
 // SecretDetails contains secret-specific details.
@@ -1479,11 +1518,26 @@ type MisconfigurationDetails struct {
 	// Policy name
 	PolicyName string `json:"policy_name,omitempty"`
 
+	// Aqua Vulnerability Database ID (e.g., AVD-AWS-0001)
+	AVDID string `json:"avd_id,omitempty"`
+
 	// Resource type
 	ResourceType string `json:"resource_type,omitempty"`
 
 	// Resource name
 	ResourceName string `json:"resource_name,omitempty"`
+
+	// Cloud provider (e.g., AWS, GCP, Azure)
+	Provider string `json:"provider,omitempty"`
+
+	// Service (e.g., S3, EC2, IAM)
+	Service string `json:"service,omitempty"`
+
+	// Namespace (e.g., builtin.aws.s3)
+	Namespace string `json:"namespace,omitempty"`
+
+	// Rego query path
+	Query string `json:"query,omitempty"`
 
 	// Expected value
 	Expected string `json:"expected,omitempty"`

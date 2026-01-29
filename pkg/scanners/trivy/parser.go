@@ -62,6 +62,17 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 		SourceType: "scanner",
 	}
 
+	// Set branch info from options (critical for asset auto-creation in ingest)
+	if opts != nil && opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts != nil && (opts.Branch != "" || opts.CommitSHA != "") {
+		// Legacy: create BranchInfo from individual fields
+		report.Metadata.Branch = &eis.BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
+	}
+
 	// Set tool info
 	report.Tool = &eis.Tool{
 		Name:         "trivy",
@@ -257,6 +268,38 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 		FixedVersion:    vuln.FixedVersion,
 		Ecosystem:       result.Type,
 		PURL:            buildPURL(result.Type, vuln.PkgName, vuln.InstalledVersion),
+		SeveritySource:  vuln.SeveritySource,
+		VendorSeverity:  vuln.VendorSeverity,
+		VulnStatus:      vuln.Status,
+	}
+
+	// Set data source if available
+	if vuln.DataSource != nil {
+		finding.Vulnerability.DataSource = &eis.VulnDataSource{
+			ID:   vuln.DataSource.ID,
+			Name: vuln.DataSource.Name,
+			URL:  vuln.DataSource.URL,
+		}
+	}
+
+	// Set container layer info if available (for image scans)
+	if vuln.Layer != nil {
+		finding.Vulnerability.Layer = &eis.ContainerLayer{
+			Digest: vuln.Layer.Digest,
+			DiffID: vuln.Layer.DiffID,
+		}
+	}
+
+	// Set dates if available
+	if vuln.PublishedDate != "" {
+		if t, err := time.Parse(time.RFC3339, vuln.PublishedDate); err == nil {
+			finding.Vulnerability.PublishedAt = &t
+		}
+	}
+	if vuln.LastModifiedDate != "" {
+		if t, err := time.Parse(time.RFC3339, vuln.LastModifiedDate); err == nil {
+			finding.Vulnerability.ModifiedAt = &t
+		}
 	}
 
 	// Set references
@@ -338,8 +381,13 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 	finding.Misconfiguration = &eis.MisconfigurationDetails{
 		PolicyID:     misconfig.ID,
 		PolicyName:   misconfig.Title,
+		AVDID:        misconfig.AVDID,
 		ResourceType: misconfig.Type,
 		ResourceName: misconfig.CauseMetadata.Resource,
+		Provider:     misconfig.CauseMetadata.Provider,
+		Service:      misconfig.CauseMetadata.Service,
+		Namespace:    misconfig.Namespace,
+		Query:        misconfig.Query,
 		Cause:        misconfig.Message,
 	}
 
@@ -433,7 +481,7 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 }
 
 // parsePackage converts Trivy package to EIS dependency.
-func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOptions) eis.Dependency {
+func (p *Parser) parsePackage(result *Result, pkg *Package, _ *core.ParseOptions) eis.Dependency {
 	id := p.generateFingerprint("pkg", result.Target, pkg.Name, pkg.Version)
 
 	dep := eis.Dependency{
@@ -441,6 +489,7 @@ func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOpti
 		Name:         pkg.Name,
 		Version:      pkg.Version,
 		PURL:         pkg.Identifier.PURL,
+		UID:          pkg.Identifier.UID,
 		Licenses:     pkg.Licenses,
 		Relationship: pkg.Relationship,
 		DependsOn:    pkg.DependsOn,
@@ -459,14 +508,34 @@ func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOpti
 		dep.Ecosystem = result.Type
 	}
 
-	// Set location
-	dep.Location = &eis.FindingLocation{
-		Path: result.Target,
-	}
+	// Set path from file path or target
 	if pkg.FilePath != "" {
-		dep.Location.Path = pkg.FilePath
+		dep.Path = pkg.FilePath
 	} else if pkg.PkgPath != "" {
-		dep.Location.Path = pkg.PkgPath
+		dep.Path = pkg.PkgPath
+	} else {
+		dep.Path = result.Target
+	}
+
+	// Set locations array from Trivy locations
+	if len(pkg.Locations) > 0 {
+		dep.Locations = make([]eis.DependencyLocation, 0, len(pkg.Locations))
+		for _, loc := range pkg.Locations {
+			dep.Locations = append(dep.Locations, eis.DependencyLocation{
+				Path:      dep.Path,
+				StartLine: loc.StartLine,
+				EndLine:   loc.EndLine,
+			})
+		}
+	}
+
+	// Also set legacy Location field for backward compatibility
+	dep.Location = &eis.FindingLocation{
+		Path: dep.Path,
+	}
+	if len(pkg.Locations) > 0 {
+		dep.Location.StartLine = pkg.Locations[0].StartLine
+		dep.Location.EndLine = pkg.Locations[0].EndLine
 	}
 
 	return dep
