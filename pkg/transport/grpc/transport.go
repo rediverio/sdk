@@ -1,4 +1,4 @@
-// Package grpc provides a gRPC transport layer for the Rediver SDK client.
+// Package grpc provides a gRPC transport layer for the Exploop SDK client.
 package grpc
 
 import (

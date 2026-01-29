@@ -40,7 +40,7 @@ type FileRetryQueue struct {
 // FileQueueConfig configures the file-based retry queue.
 type FileQueueConfig struct {
 	// Dir is the directory to store queue files.
-	// Default: ~/.rediver/retry-queue
+	// Default: ~/.exploop/retry-queue
 	Dir string
 
 	// MaxSize is the maximum number of items in the queue.
@@ -71,7 +71,7 @@ func NewFileRetryQueue(cfg *FileQueueConfig) (*FileRetryQueue, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get home directory: %w", err)
 		}
-		cfg.Dir = filepath.Join(home, ".rediver", "retry-queue")
+		cfg.Dir = filepath.Join(home, ".exploop", "retry-queue")
 	}
 
 	if cfg.MaxSize <= 0 {

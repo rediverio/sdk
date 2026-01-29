@@ -527,7 +527,7 @@ func (e *DefaultCommandExecutor) writeCustomTemplates(scannerName string, templa
 	}
 
 	// Create temp directory for templates
-	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("rediver-templates-%s-*", scannerName))
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("exploop-templates-%s-*", scannerName))
 	if err != nil {
 		return "", nil, fmt.Errorf("create temp dir: %w", err)
 	}

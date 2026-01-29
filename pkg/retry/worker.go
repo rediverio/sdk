@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // ReportPusher is the interface for pushing reports to the server.
 // This is typically implemented by the Client.
 type ReportPusher interface {
-	// PushReport pushes a RIS report to the server.
-	PushReport(ctx context.Context, report *ris.Report) error
+	// PushReport pushes a EIS report to the server.
+	PushReport(ctx context.Context, report *eis.Report) error
 }
 
 // FingerprintChecker is the interface for checking if fingerprints already exist on the server.

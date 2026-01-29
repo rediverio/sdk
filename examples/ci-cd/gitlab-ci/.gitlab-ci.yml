@@ -1,5 +1,5 @@
 # =============================================================================
-# GitLab CI: Security Scan with Rediver Agent
+# GitLab CI: Security Scan with Exploop Agent
 # =============================================================================
 # Copy this file to your repository root: .gitlab-ci.yml
 #
@@ -20,10 +20,10 @@ stages:
 
 variables:
   # Agent configuration
-  AGENT_IMAGE: rediverio/agent:ci
+  AGENT_IMAGE: exploopio/agent:ci
 
   # GitLab features
-  GIT_DEPTH: 0  # Full clone for diff-based scanning
+  GIT_DEPTH: 0 # Full clone for diff-based scanning
   GIT_STRATEGY: clone
 
   # Tool settings

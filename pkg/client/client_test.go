@@ -1,4 +1,4 @@
-// Package client provides the Rediver API client.
+// Package client provides the Exploop API client.
 package client
 
 import (
@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/retry"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/retry"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	cfg := &Config{
-		BaseURL:    "https://api.rediver.io",
+		BaseURL:    "https://api.exploop.io",
 		APIKey:     "test-key",
 		AgentID:    "agent-123",
 		Timeout:    10 * time.Second,
@@ -57,7 +57,7 @@ func TestNew(t *testing.T) {
 func TestNew_DefaultValues(t *testing.T) {
 	// Test that zero values get defaults
 	cfg := &Config{
-		BaseURL: "https://api.rediver.io",
+		BaseURL: "https://api.exploop.io",
 		APIKey:  "test-key",
 	}
 
@@ -135,10 +135,10 @@ func TestClient_PushFindings(t *testing.T) {
 		APIKey:  "test-key",
 	})
 
-	report := ris.NewReport()
-	report.Findings = []ris.Finding{
-		{ID: "finding-1", Title: "Test Finding", Severity: ris.SeverityHigh},
-		{ID: "finding-2", Title: "Another Finding", Severity: ris.SeverityMedium},
+	report := eis.NewReport()
+	report.Findings = []eis.Finding{
+		{ID: "finding-1", Title: "Test Finding", Severity: eis.SeverityHigh},
+		{ID: "finding-2", Title: "Another Finding", Severity: eis.SeverityMedium},
 	}
 
 	result, err := c.PushFindings(context.Background(), report)
@@ -168,8 +168,8 @@ func TestClient_PushFindings_Error(t *testing.T) {
 		RetryDelay: 10 * time.Millisecond,
 	})
 
-	report := ris.NewReport()
-	report.Findings = []ris.Finding{{ID: "f1"}}
+	report := eis.NewReport()
+	report.Findings = []eis.Finding{{ID: "f1"}}
 
 	_, err := c.PushFindings(context.Background(), report)
 	if err == nil {
@@ -195,9 +195,9 @@ func TestClient_PushAssets(t *testing.T) {
 		APIKey:  "test-key",
 	})
 
-	report := ris.NewReport()
-	report.Assets = []ris.Asset{
-		{ID: "asset-1", Type: ris.AssetTypeRepository, Value: "github.com/test/repo"},
+	report := eis.NewReport()
+	report.Assets = []eis.Asset{
+		{ID: "asset-1", Type: eis.AssetTypeRepository, Value: "github.com/test/repo"},
 	}
 
 	result, err := c.PushAssets(context.Background(), report)
@@ -487,7 +487,7 @@ func TestClient_ContextCancellation(t *testing.T) {
 
 func TestClient_SetVerbose(t *testing.T) {
 	c := New(&Config{
-		BaseURL: "https://api.rediver.io",
+		BaseURL: "https://api.exploop.io",
 		APIKey:  "test-key",
 	})
 
@@ -524,9 +524,9 @@ func TestClient_PushReport(t *testing.T) {
 		APIKey:  "test-key",
 	})
 
-	report := ris.NewReport()
-	report.Findings = []ris.Finding{{ID: "f1"}}
-	report.Assets = []ris.Asset{{ID: "a1", Type: ris.AssetTypeRepository, Value: "test"}}
+	report := eis.NewReport()
+	report.Findings = []eis.Finding{{ID: "f1"}}
+	report.Assets = []eis.Asset{{ID: "a1", Type: eis.AssetTypeRepository, Value: "test"}}
 
 	err := c.PushReport(context.Background(), report)
 	if err != nil {
@@ -579,7 +579,7 @@ func TestClient_CheckFingerprints_EmptyInput(t *testing.T) {
 // Benchmark tests
 func BenchmarkClient_New(b *testing.B) {
 	cfg := &Config{
-		BaseURL:    "https://api.rediver.io",
+		BaseURL:    "https://api.exploop.io",
 		APIKey:     "test-key",
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
@@ -595,7 +595,7 @@ func BenchmarkClient_NewWithOptions(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = NewWithOptions(
-			WithBaseURL("https://api.rediver.io"),
+			WithBaseURL("https://api.exploop.io"),
 			WithAPIKey("test-key"),
 			WithTimeout(30*time.Second),
 		)

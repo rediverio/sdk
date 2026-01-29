@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 const (
@@ -93,9 +93,9 @@ func (e *Enricher) Name() string {
 }
 
 // Enrich adds EPSS data to a single finding.
-func (e *Enricher) Enrich(ctx context.Context, finding *ris.Finding) (*ris.Finding, error) {
+func (e *Enricher) Enrich(ctx context.Context, finding *eis.Finding) (*eis.Finding, error) {
 	// Only enrich vulnerabilities with CVE IDs
-	if finding.Type != ris.FindingTypeVulnerability {
+	if finding.Type != eis.FindingTypeVulnerability {
 		return finding, nil
 	}
 	if finding.Vulnerability == nil || finding.Vulnerability.CVEID == "" {
@@ -131,11 +131,11 @@ func (e *Enricher) Enrich(ctx context.Context, finding *ris.Finding) (*ris.Findi
 }
 
 // EnrichBatch adds EPSS data to multiple findings.
-func (e *Enricher) EnrichBatch(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error) {
+func (e *Enricher) EnrichBatch(ctx context.Context, findings []eis.Finding) ([]eis.Finding, error) {
 	// Collect unique CVE IDs
 	cveIDs := make(map[string]bool)
 	for _, f := range findings {
-		if f.Type == ris.FindingTypeVulnerability && f.Vulnerability != nil && f.Vulnerability.CVEID != "" {
+		if f.Type == eis.FindingTypeVulnerability && f.Vulnerability != nil && f.Vulnerability.CVEID != "" {
 			cveIDs[f.Vulnerability.CVEID] = true
 		}
 	}
@@ -158,7 +158,7 @@ func (e *Enricher) EnrichBatch(ctx context.Context, findings []ris.Finding) ([]r
 	}
 
 	// Enrich each finding
-	enriched := make([]ris.Finding, len(findings))
+	enriched := make([]eis.Finding, len(findings))
 	for i, f := range findings {
 		result, _ := e.Enrich(ctx, &f)
 		enriched[i] = *result

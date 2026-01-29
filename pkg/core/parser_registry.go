@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // =============================================================================
@@ -102,16 +102,16 @@ func (p *SARIFParser) CanParse(data []byte) bool {
 		strings.Contains(s, `"version"`) && strings.Contains(s, `"runs"`)
 }
 
-// Parse converts SARIF to RIS format.
-func (p *SARIFParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*ris.Report, error) {
+// Parse converts SARIF to EIS format.
+func (p *SARIFParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*eis.Report, error) {
 	if opts == nil {
 		opts = &ParseOptions{
 			DefaultConfidence: 90,
 		}
 	}
 
-	// Use the RIS package's SARIF converter
-	convertOpts := &ris.ConvertOptions{
+	// Use the EIS package's SARIF converter
+	convertOpts := &eis.ConvertOptions{
 		AssetType:         opts.AssetType,
 		AssetValue:        opts.AssetValue,
 		AssetID:           opts.AssetID,
@@ -122,14 +122,14 @@ func (p *SARIFParser) Parse(ctx context.Context, data []byte, opts *ParseOptions
 		ToolType:          opts.ToolType,
 	}
 
-	return ris.FromSARIF(data, convertOpts)
+	return eis.FromSARIF(data, convertOpts)
 }
 
 // =============================================================================
 // JSON Parser - Generic JSON parser
 // =============================================================================
 
-// JSONParser parses generic JSON output that follows RIS schema.
+// JSONParser parses generic JSON output that follows EIS schema.
 type JSONParser struct{}
 
 // Name returns the parser name.
@@ -148,13 +148,13 @@ func (p *JSONParser) CanParse(data []byte) bool {
 		return false
 	}
 
-	// Check if it's valid JSON and has RIS markers
+	// Check if it's valid JSON and has EIS markers
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return false
 	}
 
-	// Check for RIS format markers
+	// Check for EIS format markers
 	_, hasVersion := raw["version"]
 	_, hasFindings := raw["findings"]
 	_, hasMetadata := raw["metadata"]
@@ -162,9 +162,9 @@ func (p *JSONParser) CanParse(data []byte) bool {
 	return hasVersion && (hasFindings || hasMetadata)
 }
 
-// Parse converts JSON to RIS format.
-func (p *JSONParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*ris.Report, error) {
-	var report ris.Report
+// Parse converts JSON to EIS format.
+func (p *JSONParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*eis.Report, error) {
+	var report eis.Report
 	if err := json.Unmarshal(data, &report); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
 	}
@@ -176,7 +176,7 @@ func (p *JSONParser) Parse(ctx context.Context, data []byte, opts *ParseOptions)
 			if assetID == "" {
 				assetID = "asset-1"
 			}
-			report.Assets = append(report.Assets, ris.Asset{
+			report.Assets = append(report.Assets, eis.Asset{
 				ID:    assetID,
 				Type:  opts.AssetType,
 				Value: opts.AssetValue,
@@ -231,24 +231,24 @@ func (p *BaseParser) CanParse(data []byte) bool {
 }
 
 // Parse default implementation - override in your parser.
-func (p *BaseParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*ris.Report, error) {
+func (p *BaseParser) Parse(ctx context.Context, data []byte, opts *ParseOptions) (*eis.Report, error) {
 	return nil, fmt.Errorf("Parse not implemented - override this method in your parser")
 }
 
 // CreateFinding is a helper to create a finding with common fields set.
-func (p *BaseParser) CreateFinding(id, title string, severity ris.Severity) ris.Finding {
-	return ris.Finding{
+func (p *BaseParser) CreateFinding(id, title string, severity eis.Severity) eis.Finding {
+	return eis.Finding{
 		ID:       id,
-		Type:     ris.FindingTypeVulnerability,
+		Type:     eis.FindingTypeVulnerability,
 		Title:    title,
 		Severity: severity,
 	}
 }
 
 // CreateReport is a helper to create a new report.
-func (p *BaseParser) CreateReport(toolName, toolVersion string) *ris.Report {
-	report := ris.NewReport()
-	report.Tool = &ris.Tool{
+func (p *BaseParser) CreateReport(toolName, toolVersion string) *eis.Report {
+	report := eis.NewReport()
+	report.Tool = &eis.Tool{
 		Name:    toolName,
 		Version: toolVersion,
 	}

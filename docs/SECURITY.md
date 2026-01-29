@@ -1,6 +1,6 @@
 # SDK Security Guide
 
-This document describes the security features and best practices for the Rediver SDK.
+This document describes the security features and best practices for the Exploop SDK.
 
 ---
 
@@ -15,7 +15,7 @@ The SDK provides secure credential storage with multiple protection layers.
 All credential keys are validated to prevent path traversal and injection attacks:
 
 ```go
-import "github.com/rediverio/sdk/pkg/credentials"
+import "github.com/exploopio/sdk/pkg/credentials"
 
 // Keys are automatically validated
 err := credentials.ValidateKey("my.api.key")  // OK
@@ -34,7 +34,7 @@ err := credentials.ValidateKey("key@#$")  // Error: invalid characters
 For sensitive credentials, use `EncryptedFileStore` with AES-256-GCM encryption:
 
 ```go
-import "github.com/rediverio/sdk/pkg/credentials"
+import "github.com/exploopio/sdk/pkg/credentials"
 
 // Create encryption key (32 bytes for AES-256)
 key := make([]byte, 32)
@@ -68,7 +68,7 @@ store.Set(ctx, "api.token", &credentials.Credential{
 Use constant-time comparison for credential verification to prevent timing attacks:
 
 ```go
-import "github.com/rediverio/sdk/pkg/credentials"
+import "github.com/exploopio/sdk/pkg/credentials"
 
 // Timing-safe comparison
 if credentials.SecureCompare(providedToken, expectedToken) {
@@ -83,10 +83,10 @@ The gRPC transport includes multiple security features.
 #### TLS Configuration
 
 ```go
-import "github.com/rediverio/sdk/pkg/transport/grpc"
+import "github.com/exploopio/sdk/pkg/transport/grpc"
 
 transport := grpc.NewTransport(&grpc.Config{
-    Address: "grpc.rediver.io:9090",
+    Address: "grpc.exploop.io:9090",
     UseTLS:  true,  // Always use TLS in production
 
     // InsecureSkipVerify should be false in production
@@ -105,7 +105,7 @@ transport := grpc.NewTransport(&grpc.Config{
 Validate server addresses to prevent SSRF attacks:
 
 ```go
-import "github.com/rediverio/sdk/pkg/transport/grpc"
+import "github.com/exploopio/sdk/pkg/transport/grpc"
 
 err := grpc.ValidateAddress("grpc.example.com:9090")  // OK
 err := grpc.ValidateAddress("file:///etc/passwd")     // Error: invalid scheme
@@ -122,7 +122,7 @@ Platform agents now include comprehensive security controls.
 All jobs are validated before execution:
 
 ```go
-import "github.com/rediverio/sdk/pkg/platform"
+import "github.com/exploopio/sdk/pkg/platform"
 
 config := &platform.PollerConfig{
     // Restrict allowed job types
@@ -151,7 +151,7 @@ config := &platform.PollerConfig{
 Lease identities are now cryptographically secured to prevent hijacking:
 
 ```go
-import "github.com/rediverio/sdk/pkg/platform"
+import "github.com/exploopio/sdk/pkg/platform"
 
 config := &platform.LeaseConfig{
     // Secure identity enabled by default
@@ -189,7 +189,7 @@ Custom scan templates are validated to prevent attacks.
 #### Template Validation
 
 ```go
-import "github.com/rediverio/sdk/pkg/core"
+import "github.com/exploopio/sdk/pkg/core"
 
 // Templates are automatically validated
 err := core.ValidateTemplate(&core.EmbeddedTemplate{
@@ -272,8 +272,8 @@ leaseConfig := &platform.LeaseConfig{
 
 ```bash
 # DO: Use environment variables for secrets
-export REDIVERIO_API_KEY="your-api-key"
-export REDIVERIO_ENCRYPTION_KEY="base64-encoded-key"
+export EXPLOOPIO_API_KEY="your-api-key"
+export EXPLOOPIO_ENCRYPTION_KEY="base64-encoded-key"
 
 # DON'T: Commit secrets to version control
 # api_key: "sk_live_xxxxx"  # Never do this!
@@ -310,6 +310,6 @@ export REDIVERIO_ENCRYPTION_KEY="base64-encoded-key"
 
 ## Reporting Security Issues
 
-Please report security vulnerabilities to: security@rediver.io
+Please report security vulnerabilities to: security@exploop.io
 
 Do not disclose security issues publicly until a fix is available.

@@ -6,8 +6,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // =============================================================================
@@ -17,10 +17,10 @@ import (
 // MockPusher is a mock implementation of core.Pusher for testing.
 type MockPusher struct {
 	// PushFindingsFn is called when PushFindings is invoked
-	PushFindingsFn func(ctx context.Context, report *ris.Report) (*core.PushResult, error)
+	PushFindingsFn func(ctx context.Context, report *eis.Report) (*core.PushResult, error)
 
 	// PushAssetsFn is called when PushAssets is invoked
-	PushAssetsFn func(ctx context.Context, report *ris.Report) (*core.PushResult, error)
+	PushAssetsFn func(ctx context.Context, report *eis.Report) (*core.PushResult, error)
 
 	// SendHeartbeatFn is called when SendHeartbeat is invoked
 	SendHeartbeatFn func(ctx context.Context, status *core.AgentStatus) error
@@ -36,18 +36,18 @@ type MockPusher struct {
 }
 
 type PushFindingsCall struct {
-	Report *ris.Report
+	Report *eis.Report
 }
 
 type PushAssetsCall struct {
-	Report *ris.Report
+	Report *eis.Report
 }
 
 type SendHeartbeatCall struct {
 	Status *core.AgentStatus
 }
 
-func (m *MockPusher) PushFindings(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (m *MockPusher) PushFindings(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	m.PushFindingsCalls = append(m.PushFindingsCalls, PushFindingsCall{Report: report})
 	if m.PushFindingsFn != nil {
 		return m.PushFindingsFn(ctx, report)
@@ -55,7 +55,7 @@ func (m *MockPusher) PushFindings(ctx context.Context, report *ris.Report) (*cor
 	return &core.PushResult{Success: true}, nil
 }
 
-func (m *MockPusher) PushAssets(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (m *MockPusher) PushAssets(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	m.PushAssetsCalls = append(m.PushAssetsCalls, PushAssetsCall{Report: report})
 	if m.PushAssetsFn != nil {
 		return m.PushAssetsFn(ctx, report)
@@ -166,7 +166,7 @@ func (m *MockCollector) Collect(ctx context.Context, opts *core.CollectOptions) 
 	}
 	return &core.CollectResult{
 		SourceName: m.NameVal,
-		Reports:    []*ris.Report{ris.NewReport()},
+		Reports:    []*eis.Report{eis.NewReport()},
 	}, nil
 }
 
@@ -241,7 +241,7 @@ type MockAdapter struct {
 	OutputFormatVal string
 	CanConvertVal   bool
 
-	ConvertFn func(ctx context.Context, input []byte, opts *core.AdapterOptions) (*ris.Report, error)
+	ConvertFn func(ctx context.Context, input []byte, opts *core.AdapterOptions) (*eis.Report, error)
 
 	ConvertCalls int
 }
@@ -251,12 +251,12 @@ func (m *MockAdapter) InputFormats() []string       { return m.InputFormatsVal }
 func (m *MockAdapter) OutputFormat() string         { return m.OutputFormatVal }
 func (m *MockAdapter) CanConvert(input []byte) bool { return m.CanConvertVal }
 
-func (m *MockAdapter) Convert(ctx context.Context, input []byte, opts *core.AdapterOptions) (*ris.Report, error) {
+func (m *MockAdapter) Convert(ctx context.Context, input []byte, opts *core.AdapterOptions) (*eis.Report, error) {
 	m.ConvertCalls++
 	if m.ConvertFn != nil {
 		return m.ConvertFn(ctx, input, opts)
 	}
-	return ris.NewReport(), nil
+	return eis.NewReport(), nil
 }
 
 // Ensure MockAdapter implements core.Adapter

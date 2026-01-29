@@ -1,6 +1,6 @@
 # gRPC Configuration Guide
 
-This guide explains how to use gRPC transport with the Rediver SDK.
+This guide explains how to use gRPC transport with the Exploop SDK.
 
 ## Overview
 
@@ -17,12 +17,12 @@ The SDK supports both HTTP/REST and gRPC transports. gRPC offers:
 
 ```go
 import (
-    "github.com/rediverio/sdk/pkg/transport/grpc"
+    "github.com/exploopio/sdk/pkg/transport/grpc"
 )
 
 // Create gRPC transport
 transport := grpc.NewTransport(&grpc.Config{
-    Address:  "grpc.rediver.io:9090",
+    Address:  "grpc.exploop.io:9090",
     APIKey:   os.Getenv("API_KEY"),
     WorkerID: os.Getenv("WORKER_ID"),
     UseTLS:   true,
@@ -218,7 +218,7 @@ if err != nil {
 ### Production (Default)
 ```go
 transport := grpc.NewTransport(&grpc.Config{
-    Address: "grpc.rediver.io:9090",
+    Address: "grpc.exploop.io:9090",
     UseTLS:  true,
 })
 ```
@@ -235,7 +235,7 @@ transport := grpc.NewTransport(&grpc.Config{
 ### Custom CA Certificate
 ```go
 transport := grpc.NewTransport(&grpc.Config{
-    Address:  "grpc.rediver.io:9090",
+    Address:  "grpc.exploop.io:9090",
     UseTLS:   true,
     CertFile: "/path/to/ca.crt",
 })
@@ -244,5 +244,5 @@ transport := grpc.NewTransport(&grpc.Config{
 ## See Also
 
 - [Architecture Guide](./ARCHITECTURE.md)
-- [Proto Definitions](../proto/rediver/v1/)
+- [Proto Definitions](../proto/exploop/v1/)
 - [gRPC Go Documentation](https://grpc.io/docs/languages/go/)

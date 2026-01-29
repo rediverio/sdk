@@ -1,5 +1,5 @@
 # =============================================================================
-# GitLab CI/CD Configuration for Rediver Agent
+# GitLab CI/CD Configuration for Exploop Agent
 # =============================================================================
 # Includes:
 #   - Security scanning (SAST, Secret, SCA)
@@ -34,9 +34,9 @@ variables:
 
 security-scan:
   stage: security
-  image: ghcr.io/rediverio/agent:ci
+  image: ghcr.io/exploopio/agent:ci
   variables:
-    GIT_DEPTH: 0  # Full clone for diff-based scanning
+    GIT_DEPTH: 0 # Full clone for diff-based scanning
   script:
     - |
       agent \
@@ -61,7 +61,7 @@ security-scan:
 # SAST only (faster, for quick feedback)
 sast-quick:
   stage: security
-  image: ghcr.io/rediverio/agent:ci
+  image: ghcr.io/exploopio/agent:ci
   script:
     - |
       agent \
@@ -76,7 +76,7 @@ sast-quick:
 # Secret scanning
 secret-scan:
   stage: security
-  image: ghcr.io/rediverio/agent:ci
+  image: ghcr.io/exploopio/agent:ci
   script:
     - |
       agent \
@@ -140,7 +140,7 @@ build-ci:
 
 container-scan:
   stage: container-scan
-  image: ghcr.io/rediverio/agent:ci
+  image: ghcr.io/exploopio/agent:ci
   services:
     - docker:24-dind
   variables:

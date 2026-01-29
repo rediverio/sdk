@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package rediver.v1;
+package exploop.v1;
 
-option go_package = "github.com/rediverio/sdk/pkg/proto/rediver/v1;v1";
+option go_package = "github.com/exploopio/sdk/pkg/proto/exploop/v1;v1";
 
 // =============================================================================
 // Threat Intel Service - EPSS and KEV queries

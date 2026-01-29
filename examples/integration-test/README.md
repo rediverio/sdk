@@ -1,6 +1,6 @@
 # SDK Integration Test
 
-This example demonstrates how to use the Rediver SDK to:
+This example demonstrates how to use the Exploop SDK to:
 
 1. Send heartbeat to the API
 2. Push security findings
@@ -64,32 +64,32 @@ go run ./examples/integration-test/ \
 ## Expected Output
 
 ```
-=== Rediver SDK Integration Test ===
+=== Exploop SDK Integration Test ===
 Base URL: http://localhost:8080
 
 1. Testing connection (heartbeat)...
-[rediver] Heartbeat sent: running
+.exploop] Heartbeat sent: running
    ✓ Heartbeat successful
 
 2. Testing push findings...
-[rediver] Pushing 3 findings to http://localhost:8080/api/v1/agent/ingest
-[rediver] Push completed: 3 findings created, 0 updated
+.exploop] Pushing 3 findings to http://localhost:8080/api/v1/agent/ingest
+.exploop] Push completed: 3 findings created, 0 updated
    Findings created: 3, updated: 0
    ✓ Push findings successful
 
 3. Testing push assets...
-[rediver] Pushing 3 assets to http://localhost:8080/api/v1/agent/ingest
+.exploop] Pushing 3 assets to http://localhost:8080/api/v1/agent/ingest
    Assets created: 3, updated: 0
    ✓ Push assets successful
 
 4. Testing push combined report...
-[rediver] Pushing 2 findings to http://localhost:8080/api/v1/agent/ingest
+.exploop] Pushing 2 findings to http://localhost:8080/api/v1/agent/ingest
    Assets created: 1, Findings created: 2
    ✓ Push combined successful
 
 5. Testing poll commands...
-[rediver] Polling commands from http://localhost:8080/api/v1/agent/commands?limit=10
-[rediver] Received 0 commands
+.exploop] Polling commands from http://localhost:8080/api/v1/agent/commands?limit=10
+.exploop] Received 0 commands
    Pending commands: 0
    ✓ Poll commands successful
 

@@ -124,7 +124,7 @@ var SeverityMap = map[string]string{
 	"unknown":  "info",
 }
 
-// GetRISSeverity converts Nuclei severity to RIS severity.
+// GetRISSeverity converts Nuclei severity to EIS severity.
 func GetRISSeverity(severity string) string {
 	if mapped, ok := SeverityMap[severity]; ok {
 		return mapped

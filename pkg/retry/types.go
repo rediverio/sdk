@@ -11,7 +11,7 @@
 // Example usage:
 //
 //	queue, _ := retry.NewFileRetryQueue(&retry.FileQueueConfig{
-//	    Dir: "/var/lib/rediver/retry-queue",
+//	    Dir: "/var/lib/exploop/retry-queue",
 //	})
 //
 //	worker := retry.NewRetryWorker(&retry.RetryWorkerConfig{
@@ -25,7 +25,7 @@ package retry
 import (
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // ItemType defines the type of queued item.
@@ -65,7 +65,7 @@ type QueueItem struct {
 	Status      ItemStatus `json:"status"`      // Current status
 
 	// Payload
-	Report *ris.Report `json:"report"` // The RIS report to push
+	Report *eis.Report `json:"report"` // The EIS report to push
 
 	// Retry tracking
 	Attempts    int       `json:"attempts"`     // Number of retry attempts made

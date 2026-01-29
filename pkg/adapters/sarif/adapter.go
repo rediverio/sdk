@@ -1,4 +1,4 @@
-// Package sarif provides an adapter to convert SARIF format to RIS.
+// Package sarif provides an adapter to convert SARIF format to EIS.
 package sarif
 
 import (
@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Adapter converts SARIF (Static Analysis Results Interchange Format) to RIS.
+// Adapter converts SARIF (Static Analysis Results Interchange Format) to EIS.
 type Adapter struct{}
 
 // NewAdapter creates a new SARIF adapter.
@@ -43,18 +43,18 @@ func (a *Adapter) CanConvert(input []byte) bool {
 	return sarif.Schema != "" || sarif.Version != ""
 }
 
-// Convert transforms SARIF input to RIS Report.
-func (a *Adapter) Convert(ctx context.Context, input []byte, opts *core.AdapterOptions) (*ris.Report, error) {
+// Convert transforms SARIF input to EIS Report.
+func (a *Adapter) Convert(ctx context.Context, input []byte, opts *core.AdapterOptions) (*eis.Report, error) {
 	var sarif SARIFReport
 	if err := json.Unmarshal(input, &sarif); err != nil {
 		return nil, fmt.Errorf("parse SARIF: %w", err)
 	}
 
-	report := ris.NewReport()
+	report := eis.NewReport()
 	report.Metadata.SourceType = "scanner"
 
 	if opts != nil {
-		report.Metadata.Scope = &ris.Scope{
+		report.Metadata.Scope = &eis.Scope{
 			Name: opts.Repository,
 		}
 	}
@@ -63,7 +63,7 @@ func (a *Adapter) Convert(ctx context.Context, input []byte, opts *core.AdapterO
 	for _, run := range sarif.Runs {
 		// Set tool info from first run
 		if report.Tool == nil && run.Tool.Driver.Name != "" {
-			report.Tool = &ris.Tool{
+			report.Tool = &eis.Tool{
 				Name:    run.Tool.Driver.Name,
 				Version: run.Tool.Driver.Version,
 				Vendor:  run.Tool.Driver.Organization,
@@ -89,13 +89,13 @@ func (a *Adapter) Convert(ctx context.Context, input []byte, opts *core.AdapterO
 	return report, nil
 }
 
-// convertResult converts a SARIF result to a RIS finding.
-func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFRule, opts *core.AdapterOptions) *ris.Finding {
+// convertResult converts a SARIF result to a EIS finding.
+func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFRule, opts *core.AdapterOptions) *eis.Finding {
 	rule := ruleIndex[result.RuleID]
 
-	finding := &ris.Finding{
+	finding := &eis.Finding{
 		ID:       result.RuleID,
-		Type:     ris.FindingTypeVulnerability,
+		Type:     eis.FindingTypeVulnerability,
 		RuleID:   result.RuleID,
 		Severity: mapSARIFSeverity(result.Level),
 	}
@@ -113,7 +113,7 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 		for _, tag := range rule.Properties.Tags {
 			if len(tag) > 4 && tag[:4] == "CWE-" {
 				if finding.Vulnerability == nil {
-					finding.Vulnerability = &ris.VulnerabilityDetails{}
+					finding.Vulnerability = &eis.VulnerabilityDetails{}
 				}
 				finding.Vulnerability.CWEIDs = append(finding.Vulnerability.CWEIDs, tag)
 			}
@@ -133,7 +133,7 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 	// Set location from first location
 	if len(result.Locations) > 0 {
 		loc := result.Locations[0]
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path:        loc.PhysicalLocation.ArtifactLocation.URI,
 			StartLine:   loc.PhysicalLocation.Region.StartLine,
 			EndLine:     loc.PhysicalLocation.Region.EndLine,
@@ -160,7 +160,7 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 
 	// Convert related locations
 	for _, loc := range result.RelatedLocations {
-		finding.RelatedLocations = append(finding.RelatedLocations, &ris.FindingLocation{
+		finding.RelatedLocations = append(finding.RelatedLocations, &eis.FindingLocation{
 			Path:        loc.PhysicalLocation.ArtifactLocation.URI,
 			StartLine:   loc.PhysicalLocation.Region.StartLine,
 			EndLine:     loc.PhysicalLocation.Region.EndLine,
@@ -172,12 +172,12 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 
 	// Convert stacks
 	for _, stack := range result.Stacks {
-		st := &ris.StackTrace{
+		st := &eis.StackTrace{
 			Message: stack.Message.Text,
 		}
 		for _, frame := range stack.Frames {
-			st.Frames = append(st.Frames, &ris.StackFrame{
-				Location: &ris.FindingLocation{
+			st.Frames = append(st.Frames, &eis.StackFrame{
+				Location: &eis.FindingLocation{
 					Path:        frame.Location.PhysicalLocation.ArtifactLocation.URI,
 					StartLine:   frame.Location.PhysicalLocation.Region.StartLine,
 					EndLine:     frame.Location.PhysicalLocation.Region.EndLine,
@@ -195,9 +195,9 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 
 	// Convert attachments
 	for _, att := range result.Attachments {
-		finding.Attachments = append(finding.Attachments, &ris.Attachment{
+		finding.Attachments = append(finding.Attachments, &eis.Attachment{
 			Description: att.Description.Text,
-			ArtifactLocation: &ris.ArtifactLocation{
+			ArtifactLocation: &eis.ArtifactLocation{
 				URI: att.ArtifactLocation.URI,
 			},
 		})
@@ -205,7 +205,7 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 
 	// Filter by severity if option is set
 	if opts != nil && opts.MinSeverity != "" {
-		if !meetsMinSeverity(finding.Severity, ris.Severity(opts.MinSeverity)) {
+		if !meetsMinSeverity(finding.Severity, eis.Severity(opts.MinSeverity)) {
 			return nil
 		}
 	}
@@ -213,17 +213,17 @@ func (a *Adapter) convertResult(result SARIFResult, ruleIndex map[string]*SARIFR
 	return finding
 }
 
-// convertCodeFlow converts SARIF code flow to RIS data flow.
-func (a *Adapter) convertCodeFlow(cf SARIFCodeFlow) *ris.DataFlow {
+// convertCodeFlow converts SARIF code flow to EIS data flow.
+func (a *Adapter) convertCodeFlow(cf SARIFCodeFlow) *eis.DataFlow {
 	if len(cf.ThreadFlows) == 0 {
 		return nil
 	}
 
-	dataFlow := &ris.DataFlow{}
+	dataFlow := &eis.DataFlow{}
 
 	for _, tf := range cf.ThreadFlows {
 		for i, loc := range tf.Locations {
-			dfLoc := ris.DataFlowLocation{
+			dfLoc := eis.DataFlowLocation{
 				Path:    loc.Location.PhysicalLocation.ArtifactLocation.URI,
 				Line:    loc.Location.PhysicalLocation.Region.StartLine,
 				Column:  loc.Location.PhysicalLocation.Region.StartColumn,
@@ -245,30 +245,30 @@ func (a *Adapter) convertCodeFlow(cf SARIFCodeFlow) *ris.DataFlow {
 	return dataFlow
 }
 
-// mapSARIFSeverity maps SARIF level to RIS severity.
-func mapSARIFSeverity(level string) ris.Severity {
+// mapSARIFSeverity maps SARIF level to EIS severity.
+func mapSARIFSeverity(level string) eis.Severity {
 	switch level {
 	case "error":
-		return ris.SeverityHigh
+		return eis.SeverityHigh
 	case "warning":
-		return ris.SeverityMedium
+		return eis.SeverityMedium
 	case "note":
-		return ris.SeverityLow
+		return eis.SeverityLow
 	case "none":
-		return ris.SeverityInfo
+		return eis.SeverityInfo
 	default:
-		return ris.SeverityMedium
+		return eis.SeverityMedium
 	}
 }
 
 // meetsMinSeverity checks if severity meets minimum threshold.
-func meetsMinSeverity(s, min ris.Severity) bool {
-	order := map[ris.Severity]int{
-		ris.SeverityCritical: 5,
-		ris.SeverityHigh:     4,
-		ris.SeverityMedium:   3,
-		ris.SeverityLow:      2,
-		ris.SeverityInfo:     1,
+func meetsMinSeverity(s, min eis.Severity) bool {
+	order := map[eis.Severity]int{
+		eis.SeverityCritical: 5,
+		eis.SeverityHigh:     4,
+		eis.SeverityMedium:   3,
+		eis.SeverityLow:      2,
+		eis.SeverityInfo:     1,
 	}
 	return order[s] >= order[min]
 }

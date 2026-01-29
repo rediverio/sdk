@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/rediverio/sdk/pkg/connectors"
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/connectors"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 // ShodanConnector is a connector for the Shodan API.

@@ -3,7 +3,7 @@ package chunk
 import (
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // ReportStatus represents the status of a chunked report.
@@ -90,10 +90,10 @@ type ChunkData struct {
 	ReportID    string              `json:"report_id"`
 	ChunkIndex  int                 `json:"chunk_index"`
 	TotalChunks int                 `json:"total_chunks"`
-	Tool        *ris.Tool           `json:"tool,omitempty"`
-	Metadata    *ris.ReportMetadata `json:"metadata,omitempty"`
-	Assets      []ris.Asset         `json:"assets,omitempty"`
-	Findings    []ris.Finding       `json:"findings,omitempty"`
+	Tool        *eis.Tool           `json:"tool,omitempty"`
+	Metadata    *eis.ReportMetadata `json:"metadata,omitempty"`
+	Assets      []eis.Asset         `json:"assets,omitempty"`
+	Findings    []eis.Finding       `json:"findings,omitempty"`
 	IsFinal     bool                `json:"is_final"`
 }
 

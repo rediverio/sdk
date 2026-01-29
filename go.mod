@@ -1,4 +1,4 @@
-module github.com/rediverio/sdk
+module github.com/exploopio/sdk
 
 go 1.25
 

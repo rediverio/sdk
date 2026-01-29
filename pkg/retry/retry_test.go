@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 func TestFileRetryQueue_EnqueueDequeue(t *testing.T) {
@@ -33,14 +33,14 @@ func TestFileRetryQueue_EnqueueDequeue(t *testing.T) {
 	// Create test item
 	item := &QueueItem{
 		Type: ItemTypeFindings,
-		Report: &ris.Report{
+		Report: &eis.Report{
 			Version: "1.0",
-			Tool:    &ris.Tool{Name: "test-scanner", Version: "1.0"},
-			Findings: []ris.Finding{
+			Tool:    &eis.Tool{Name: "test-scanner", Version: "1.0"},
+			Findings: []eis.Finding{
 				{
 					RuleID:   "TEST-001",
 					Title:    "Test Finding",
-					Severity: ris.SeverityHigh,
+					Severity: eis.SeverityHigh,
 				},
 			},
 		},
@@ -105,7 +105,7 @@ func TestFileRetryQueue_Deduplication(t *testing.T) {
 	item := &QueueItem{
 		Type:        ItemTypeFindings,
 		Fingerprint: "test-fingerprint-123",
-		Report:      &ris.Report{Version: "1.0"},
+		Report:      &eis.Report{Version: "1.0"},
 	}
 
 	// First enqueue should succeed
@@ -118,7 +118,7 @@ func TestFileRetryQueue_Deduplication(t *testing.T) {
 	item2 := &QueueItem{
 		Type:        ItemTypeFindings,
 		Fingerprint: "test-fingerprint-123", // Same fingerprint
-		Report:      &ris.Report{Version: "1.0"},
+		Report:      &eis.Report{Version: "1.0"},
 	}
 
 	_, err = queue.Enqueue(ctx, item2)
@@ -155,7 +155,7 @@ func TestFileRetryQueue_Stats(t *testing.T) {
 	for i := range 3 {
 		item := &QueueItem{
 			Type:   ItemTypeFindings,
-			Report: &ris.Report{Version: "1.0"},
+			Report: &eis.Report{Version: "1.0"},
 		}
 		if i == 2 {
 			item.Type = ItemTypeAssets
@@ -274,7 +274,7 @@ func TestFileRetryQueue_Persistence(t *testing.T) {
 
 	item := &QueueItem{
 		Type:   ItemTypeFindings,
-		Report: &ris.Report{Version: "1.0"},
+		Report: &eis.Report{Version: "1.0"},
 	}
 	id, err := queue1.Enqueue(ctx, item)
 	if err != nil {
@@ -328,7 +328,7 @@ func TestFileRetryQueue_Cleanup(t *testing.T) {
 	// Add an item
 	item := &QueueItem{
 		Type:      ItemTypeFindings,
-		Report:    &ris.Report{Version: "1.0"},
+		Report:    &eis.Report{Version: "1.0"},
 		CreatedAt: time.Now().Add(-2 * time.Hour), // Created 2 hours ago
 	}
 	_, err = queue.Enqueue(ctx, item)
@@ -375,7 +375,7 @@ func TestFileRetryQueue_List(t *testing.T) {
 	for _, itemType := range types {
 		item := &QueueItem{
 			Type:   itemType,
-			Report: &ris.Report{Version: "1.0"},
+			Report: &eis.Report{Version: "1.0"},
 		}
 		_, err := queue.Enqueue(ctx, item)
 		if err != nil {
@@ -417,7 +417,7 @@ type mockPusher struct {
 	failUntil int
 }
 
-func (m *mockPusher) PushReport(ctx context.Context, report *ris.Report) error {
+func (m *mockPusher) PushReport(ctx context.Context, report *eis.Report) error {
 	m.pushCount++
 	if m.pushCount <= m.failUntil {
 		return context.DeadlineExceeded // Simulate timeout
@@ -443,7 +443,7 @@ func TestRetryWorker_ProcessBatch(t *testing.T) {
 	// Add an item
 	item := &QueueItem{
 		Type:   ItemTypeFindings,
-		Report: &ris.Report{Version: "1.0"},
+		Report: &eis.Report{Version: "1.0"},
 	}
 	_, err = queue.Enqueue(ctx, item)
 	if err != nil {
@@ -500,7 +500,7 @@ func TestFileRetryQueue_MaxSize(t *testing.T) {
 	for i := range 3 {
 		item := &QueueItem{
 			Type:   ItemTypeFindings,
-			Report: &ris.Report{Version: "1.0"},
+			Report: &eis.Report{Version: "1.0"},
 		}
 		_, err := queue.Enqueue(ctx, item)
 		if err != nil {
@@ -511,7 +511,7 @@ func TestFileRetryQueue_MaxSize(t *testing.T) {
 	// Next enqueue should fail
 	item := &QueueItem{
 		Type:   ItemTypeFindings,
-		Report: &ris.Report{Version: "1.0"},
+		Report: &eis.Report{Version: "1.0"},
 	}
 	_, err = queue.Enqueue(ctx, item)
 	if err != ErrQueueFull {

@@ -1,4 +1,4 @@
-// Package errors provides custom error types for the Rediver SDK.
+// Package errors provides custom error types for the Exploop SDK.
 // It follows industry best practices (HashiCorp, AWS SDK) for error handling.
 package errors
 
@@ -103,7 +103,7 @@ func (e *Error) Is(target error) bool {
 // API Error
 // =============================================================================
 
-// APIError represents an error returned by the Rediver API.
+// APIError represents an error returned by the Exploop API.
 type APIError struct {
 	// StatusCode is the HTTP status code
 	StatusCode int `json:"status_code"`

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // BaseProcessor provides a default implementation of the Processor interface.
@@ -144,7 +144,7 @@ func (p *BaseProcessor) ProcessBatch(ctx context.Context, scanners []Scanner, op
 }
 
 // saveLocal saves the report to a local file.
-func (p *BaseProcessor) saveLocal(report *ris.Report, scannerName, outputDir string) (string, error) {
+func (p *BaseProcessor) saveLocal(report *eis.Report, scannerName, outputDir string) (string, error) {
 	if outputDir == "" {
 		outputDir = "."
 	}
@@ -173,7 +173,7 @@ func (p *BaseProcessor) saveLocal(report *ris.Report, scannerName, outputDir str
 }
 
 // pushWithRetry pushes findings with retry logic.
-func (p *BaseProcessor) pushWithRetry(ctx context.Context, report *ris.Report, maxRetries, retryDelaySec int) (*PushResult, error) {
+func (p *BaseProcessor) pushWithRetry(ctx context.Context, report *eis.Report, maxRetries, retryDelaySec int) (*PushResult, error) {
 	if maxRetries == 0 {
 		maxRetries = 3
 	}

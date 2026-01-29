@@ -3,7 +3,7 @@ package codeql
 import (
 	"testing"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // =============================================================================
@@ -343,8 +343,8 @@ func TestParser_Parse_SingleFinding(t *testing.T) {
 	}
 
 	// Check severity (security-severity 8.0 -> High)
-	if f.Severity != ris.SeverityHigh {
-		t.Errorf("Severity = %q, want %q", f.Severity, ris.SeverityHigh)
+	if f.Severity != eis.SeverityHigh {
+		t.Errorf("Severity = %q, want %q", f.Severity, eis.SeverityHigh)
 	}
 
 	// Check confidence (precision: high -> 80)
@@ -401,8 +401,8 @@ func TestParser_Parse_DataFlow(t *testing.T) {
 	f := findings[0]
 
 	// Verify severity from security-severity 9.5 -> Critical
-	if f.Severity != ris.SeverityCritical {
-		t.Errorf("Severity = %q, want %q", f.Severity, ris.SeverityCritical)
+	if f.Severity != eis.SeverityCritical {
+		t.Errorf("Severity = %q, want %q", f.Severity, eis.SeverityCritical)
 	}
 
 	// Verify confidence from precision: very-high -> 95
@@ -433,8 +433,8 @@ func TestParser_Parse_DataFlow(t *testing.T) {
 		if src.Line != 25 {
 			t.Errorf("Source.Line = %d, want 25", src.Line)
 		}
-		if src.Type != ris.DataFlowLocationSource {
-			t.Errorf("Source.Type = %q, want %q", src.Type, ris.DataFlowLocationSource)
+		if src.Type != eis.DataFlowLocationSource {
+			t.Errorf("Source.Type = %q, want %q", src.Type, eis.DataFlowLocationSource)
 		}
 		if src.TaintState != "tainted" {
 			t.Errorf("Source.TaintState = %q, want %q", src.TaintState, "tainted")
@@ -452,8 +452,8 @@ func TestParser_Parse_DataFlow(t *testing.T) {
 		if inter.Line != 30 {
 			t.Errorf("Intermediate.Line = %d, want 30", inter.Line)
 		}
-		if inter.Type != ris.DataFlowLocationPropagator {
-			t.Errorf("Intermediate.Type = %q, want %q", inter.Type, ris.DataFlowLocationPropagator)
+		if inter.Type != eis.DataFlowLocationPropagator {
+			t.Errorf("Intermediate.Type = %q, want %q", inter.Type, eis.DataFlowLocationPropagator)
 		}
 	}
 
@@ -465,8 +465,8 @@ func TestParser_Parse_DataFlow(t *testing.T) {
 		if sink.Line != 35 {
 			t.Errorf("Sink.Line = %d, want 35", sink.Line)
 		}
-		if sink.Type != ris.DataFlowLocationSink {
-			t.Errorf("Sink.Type = %q, want %q", sink.Type, ris.DataFlowLocationSink)
+		if sink.Type != eis.DataFlowLocationSink {
+			t.Errorf("Sink.Type = %q, want %q", sink.Type, eis.DataFlowLocationSink)
 		}
 	}
 
@@ -569,8 +569,8 @@ func TestParser_Parse_Sanitizer(t *testing.T) {
 		if san.Function != "EscapeHTML" {
 			t.Errorf("Sanitizer.Function = %q, want %q", san.Function, "EscapeHTML")
 		}
-		if san.Type != ris.DataFlowLocationSanitizer {
-			t.Errorf("Sanitizer.Type = %q, want %q", san.Type, ris.DataFlowLocationSanitizer)
+		if san.Type != eis.DataFlowLocationSanitizer {
+			t.Errorf("Sanitizer.Type = %q, want %q", san.Type, eis.DataFlowLocationSanitizer)
 		}
 		if san.TaintState != "sanitized" {
 			t.Errorf("Sanitizer.TaintState = %q, want %q", san.TaintState, "sanitized")
@@ -616,61 +616,61 @@ func TestParser_ConvertLevel(t *testing.T) {
 		name     string
 		level    string
 		rule     *Rule
-		expected ris.Severity
+		expected eis.Severity
 	}{
 		{
 			name:     "security-severity 9.5 -> critical",
 			level:    "error",
 			rule:     &Rule{Properties: RuleProperties{SecuritySeverity: "9.5"}},
-			expected: ris.SeverityCritical,
+			expected: eis.SeverityCritical,
 		},
 		{
 			name:     "security-severity 8.0 -> high",
 			level:    "error",
 			rule:     &Rule{Properties: RuleProperties{SecuritySeverity: "8.0"}},
-			expected: ris.SeverityHigh,
+			expected: eis.SeverityHigh,
 		},
 		{
 			name:     "security-severity 5.5 -> medium",
 			level:    "error",
 			rule:     &Rule{Properties: RuleProperties{SecuritySeverity: "5.5"}},
-			expected: ris.SeverityMedium,
+			expected: eis.SeverityMedium,
 		},
 		{
 			name:     "security-severity 2.0 -> low",
 			level:    "error",
 			rule:     &Rule{Properties: RuleProperties{SecuritySeverity: "2.0"}},
-			expected: ris.SeverityLow,
+			expected: eis.SeverityLow,
 		},
 		{
 			name:     "security-severity 0.0 -> info",
 			level:    "error",
 			rule:     &Rule{Properties: RuleProperties{SecuritySeverity: "0.0"}},
-			expected: ris.SeverityInfo,
+			expected: eis.SeverityInfo,
 		},
 		{
 			name:     "fallback error -> high",
 			level:    "error",
 			rule:     nil,
-			expected: ris.SeverityHigh,
+			expected: eis.SeverityHigh,
 		},
 		{
 			name:     "fallback warning -> medium",
 			level:    "warning",
 			rule:     nil,
-			expected: ris.SeverityMedium,
+			expected: eis.SeverityMedium,
 		},
 		{
 			name:     "fallback note -> low",
 			level:    "note",
 			rule:     nil,
-			expected: ris.SeverityLow,
+			expected: eis.SeverityLow,
 		},
 		{
 			name:     "fallback unknown -> info",
 			level:    "unknown",
 			rule:     nil,
-			expected: ris.SeverityInfo,
+			expected: eis.SeverityInfo,
 		},
 	}
 
@@ -879,39 +879,39 @@ func TestParser_BuildDataFlowSummary(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		df       *ris.DataFlow
+		df       *eis.DataFlow
 		contains []string
 	}{
 		{
 			name: "basic flow",
-			df: &ris.DataFlow{
-				Sources: []ris.DataFlowLocation{{Path: "a.go", Line: 10}},
-				Sinks:   []ris.DataFlowLocation{{Path: "b.go", Line: 20, Function: "dangerous"}},
+			df: &eis.DataFlow{
+				Sources: []eis.DataFlowLocation{{Path: "a.go", Line: 10}},
+				Sinks:   []eis.DataFlowLocation{{Path: "b.go", Line: 20, Function: "dangerous"}},
 			},
 			contains: []string{"flows from", "a.go:10", "dangerous()"},
 		},
 		{
 			name: "with intermediates",
-			df: &ris.DataFlow{
-				Sources:       []ris.DataFlowLocation{{Path: "a.go", Line: 10}},
-				Intermediates: []ris.DataFlowLocation{{}, {}, {}},
-				Sinks:         []ris.DataFlowLocation{{Path: "b.go", Line: 20}},
+			df: &eis.DataFlow{
+				Sources:       []eis.DataFlowLocation{{Path: "a.go", Line: 10}},
+				Intermediates: []eis.DataFlowLocation{{}, {}, {}},
+				Sinks:         []eis.DataFlowLocation{{Path: "b.go", Line: 20}},
 			},
 			contains: []string{"through 3 step(s)"},
 		},
 		{
 			name: "with label",
-			df: &ris.DataFlow{
-				Sources: []ris.DataFlowLocation{{Path: "a.go", Line: 10, Label: "userInput"}},
-				Sinks:   []ris.DataFlowLocation{{Path: "b.go", Line: 20}},
+			df: &eis.DataFlow{
+				Sources: []eis.DataFlowLocation{{Path: "a.go", Line: 10, Label: "userInput"}},
+				Sinks:   []eis.DataFlowLocation{{Path: "b.go", Line: 20}},
 			},
 			contains: []string{"userInput flows from"},
 		},
 		{
 			name: "empty sources",
-			df: &ris.DataFlow{
-				Sources: []ris.DataFlowLocation{},
-				Sinks:   []ris.DataFlowLocation{{Path: "b.go", Line: 20}},
+			df: &eis.DataFlow{
+				Sources: []eis.DataFlowLocation{},
+				Sinks:   []eis.DataFlowLocation{{Path: "b.go", Line: 20}},
 			},
 			contains: nil, // Should return empty string
 		},

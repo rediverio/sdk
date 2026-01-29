@@ -1,5 +1,5 @@
 # =============================================================================
-# Rediver Agent Configuration Template
+# Exploop Agent Configuration Template
 # =============================================================================
 # Copy this file to agent.yaml and update with your settings:
 #   cp agent.yaml.template agent.yaml
@@ -11,7 +11,7 @@
 # Agent Settings
 # -----------------------------------------------------------------------------
 agent:
-  # Display name for this agent (shown in Rediver UI)
+  # Display name for this agent (shown in Exploop UI)
   name: "My Security Scanner"
 
   # Deployment region (shown in UI for monitoring)
@@ -20,7 +20,7 @@ agent:
   #   REGION > AWS_REGION > GOOGLE_CLOUD_REGION > AZURE_REGION
   region: ""
 
-  # Enable remote command execution from Rediver platform
+  # Enable remote command execution from Exploop platform
   # When true, the agent can receive scan commands from the server
   enable_commands: true
 
@@ -41,7 +41,7 @@ agent:
 server:
   # API URL
   # Use environment variable: ${API_URL}
-  base_url: "https://api.rediver.io"
+  base_url: "https://api.exploop.io"
 
   # API Key for authentication
   # Get this from: UI > Settings > API Keys
@@ -112,11 +112,11 @@ output:
   format: json
 
   # Output file (optional, stdout if not set)
-  # file: /var/log/rediver/results.json
+  # file: /var/log/exploop/results.json
 
   # Generate SARIF report
   sarif: false
-  # sarif_file: /var/log/rediver/results.sarif
+  # sarif_file: /var/log//results.sarif
 
 # -----------------------------------------------------------------------------
 # CI/CD Settings (auto-detected when -auto-ci flag is used)
@@ -128,7 +128,7 @@ ci:
   # Fail on severity level: critical, high, medium, low
   fail_on: critical
 
-  # Push results to Rediver platform
+  # Push results to Exploop platform
   push: true
 
 # -----------------------------------------------------------------------------

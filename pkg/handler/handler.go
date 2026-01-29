@@ -3,9 +3,9 @@
 package handler
 
 import (
-	"github.com/rediverio/sdk/pkg/gitenv"
-	"github.com/rediverio/sdk/pkg/ris"
-	"github.com/rediverio/sdk/pkg/strategy"
+	"github.com/exploopio/sdk/pkg/gitenv"
+	"github.com/exploopio/sdk/pkg/eis"
+	"github.com/exploopio/sdk/pkg/strategy"
 )
 
 // ScanHandler manages the lifecycle of a security scan.
@@ -34,7 +34,7 @@ type ScanInfo struct {
 
 // HandleFindingsParams contains parameters for handling findings.
 type HandleFindingsParams struct {
-	Report       *ris.Report
+	Report       *eis.Report
 	Strategy     strategy.ScanStrategy
 	ChangedFiles []strategy.ChangedFile
 	GitEnv       gitenv.GitEnv

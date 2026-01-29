@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Parser converts subfinder output to RIS format.
+// Parser converts subfinder output to EIS format.
 type Parser struct{}
 
 // NewParser creates a new subfinder parser.
@@ -56,20 +56,20 @@ func (p *Parser) CanParse(data []byte) bool {
 	return false
 }
 
-// Parse converts subfinder output to RIS report.
-func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// Parse converts subfinder output to EIS report.
+func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	subdomains, err := p.parseSubdomains(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subfinder output: %w", err)
 	}
 
 	// Create assets from subdomains
-	var assets []ris.Asset
+	var assets []eis.Asset
 	for _, sub := range subdomains {
-		asset := ris.Asset{
-			Type:  ris.AssetTypeDomain,
+		asset := eis.Asset{
+			Type:  eis.AssetTypeDomain,
 			Value: sub.Host,
-			Properties: ris.Properties{
+			Properties: eis.Properties{
 				"root_domain": sub.Domain,
 				"source":      sub.Source,
 			},
@@ -77,19 +77,19 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 		assets = append(assets, asset)
 	}
 
-	report := &ris.Report{
+	report := &eis.Report{
 		Version: "1.0",
-		Metadata: ris.ReportMetadata{
+		Metadata: eis.ReportMetadata{
 			Timestamp:  time.Now(),
 			SourceType: "scanner",
-			Properties: ris.Properties{
+			Properties: eis.Properties{
 				"scanner":       "subfinder",
 				"scanner_type":  "recon",
 				"source_format": "subfinder-json",
 				"assets_count":  len(assets),
 			},
 		},
-		Tool: &ris.Tool{
+		Tool: &eis.Tool{
 			Name:   "subfinder",
 			Vendor: "projectdiscovery",
 		},
@@ -99,7 +99,7 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 	// Add scope info if provided
 	if opts != nil {
 		if opts.AssetValue != "" {
-			report.Metadata.Scope = &ris.Scope{
+			report.Metadata.Scope = &eis.Scope{
 				Type: string(opts.AssetType),
 				Name: opts.AssetValue,
 			}

@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/google/uuid"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // Splitter handles report chunking logic.
@@ -22,7 +22,7 @@ func NewSplitter(cfg *Config) *Splitter {
 }
 
 // NeedsChunking determines if a report should be chunked.
-func (s *Splitter) NeedsChunking(report *ris.Report) bool {
+func (s *Splitter) NeedsChunking(report *eis.Report) bool {
 	if len(report.Findings) >= s.cfg.MinFindingsForChunking {
 		return true
 	}
@@ -47,7 +47,7 @@ func (s *Splitter) NeedsChunking(report *ris.Report) bool {
 // 3. Create chunks that respect both findings and assets limits
 // 4. First chunk always includes tool and metadata
 // 5. Each chunk is self-contained with its assets and findings
-func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
+func (s *Splitter) Split(report *eis.Report) ([]*ChunkData, error) {
 	reportID := s.getReportID(report)
 
 	if !s.NeedsChunking(report) {
@@ -67,15 +67,15 @@ func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
 	chunks := make([]*ChunkData, 0)
 
 	// Build asset reference map: assetRef -> asset
-	assetMap := make(map[string]*ris.Asset)
+	assetMap := make(map[string]*eis.Asset)
 	for i := range report.Assets {
 		a := &report.Assets[i]
 		assetMap[a.ID] = a
 	}
 
 	// Group findings by asset reference
-	findingsByAsset := make(map[string][]ris.Finding)
-	orphanFindings := make([]ris.Finding, 0) // Findings without asset_ref
+	findingsByAsset := make(map[string][]eis.Finding)
+	orphanFindings := make([]eis.Finding, 0) // Findings without asset_ref
 
 	for _, f := range report.Findings {
 		if f.AssetRef != "" {
@@ -94,8 +94,8 @@ func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
 
 	// Create chunks
 	chunkIndex := 0
-	currentAssets := make([]ris.Asset, 0, s.cfg.MaxAssetsPerChunk)
-	currentFindings := make([]ris.Finding, 0, s.cfg.MaxFindingsPerChunk)
+	currentAssets := make([]eis.Asset, 0, s.cfg.MaxAssetsPerChunk)
+	currentFindings := make([]eis.Finding, 0, s.cfg.MaxFindingsPerChunk)
 	addedAssets := make(map[string]bool) // Track which assets we've added
 
 	flushChunk := func(isFinal bool) {
@@ -121,8 +121,8 @@ func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
 		chunkIndex++
 
 		// Reset for next chunk
-		currentAssets = make([]ris.Asset, 0, s.cfg.MaxAssetsPerChunk)
-		currentFindings = make([]ris.Finding, 0, s.cfg.MaxFindingsPerChunk)
+		currentAssets = make([]eis.Asset, 0, s.cfg.MaxAssetsPerChunk)
+		currentFindings = make([]eis.Finding, 0, s.cfg.MaxFindingsPerChunk)
 	}
 
 	// Process findings grouped by asset
@@ -216,7 +216,7 @@ func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
 }
 
 // getReportID extracts or generates a report ID.
-func (s *Splitter) getReportID(report *ris.Report) string {
+func (s *Splitter) getReportID(report *eis.Report) string {
 	if report.Metadata.ID != "" {
 		return report.Metadata.ID
 	}

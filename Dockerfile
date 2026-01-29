@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # =============================================================================
-# Rediver SDK - Development & Test Dockerfile
+# Exploop SDK - Development & Test Dockerfile
 # =============================================================================
 # Targets:
 #   - test:     Run all SDK tests
@@ -8,15 +8,15 @@
 #   - examples: Build example programs
 #
 # Build examples:
-#   docker build --target test -t rediverio/sdk:test .
-#   docker build --target dev -t rediverio/sdk:dev .
-#   docker build --target examples -t rediverio/sdk:examples .
+#   docker build --target test -t exploopio/sdk:test .
+#   docker build --target dev -t exploopio/sdk:dev .
+#   docker build --target examples -t exploopio/sdk:examples .
 #
 # Run tests:
-#   docker run --rm rediverio/sdk:test
+#   docker run --rm exploopio/sdk:test
 #
 # Run integration test:
-#   docker run --rm rediverio/sdk:examples integration-test -api-key=$API_KEY -url=$API_URL
+#   docker run --rm exploopio/sdk:examples integration-test -api-key=$API_KEY -url=$API_URL
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -103,9 +103,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Final examples image
 FROM gcr.io/distroless/static-debian12:nonroot AS examples
 
-LABEL org.opencontainers.image.title="Rediver SDK Examples"
-LABEL org.opencontainers.image.description="Example programs built with Rediver SDK"
-LABEL org.opencontainers.image.source="https://github.com/rediverio/sdk"
+LABEL org.opencontainers.image.title="Exploop SDK Examples"
+LABEL org.opencontainers.image.description="Example programs built with Exploop SDK"
+LABEL org.opencontainers.image.source="https://github.com/exploopio/sdk"
 
 COPY --from=examples-builder /out/* /usr/local/bin/
 COPY --from=examples-builder /usr/share/zoneinfo /usr/share/zoneinfo

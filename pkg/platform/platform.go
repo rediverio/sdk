@@ -1,8 +1,8 @@
 // Package platform provides components for running agents in platform mode.
 //
-// Platform agents are centrally managed by Rediver and execute jobs on behalf
+// Platform agents are centrally managed by Exploop and execute jobs on behalf
 // of tenants. Unlike tenant agents that run within a tenant's infrastructure,
-// platform agents are deployed and operated by the Rediver platform itself.
+// platform agents are deployed and operated by the Exploop platform itself.
 //
 // Key components:
 //   - LeaseManager: Handles K8s-style lease renewal for health monitoring

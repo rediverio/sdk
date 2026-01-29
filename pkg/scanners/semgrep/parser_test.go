@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 func TestParser_CreateAssetFromOptions(t *testing.T) {
@@ -16,7 +16,7 @@ func TestParser_CreateAssetFromOptions(t *testing.T) {
 		opts          *core.ParseOptions
 		wantAsset     bool
 		wantAssetName string
-		wantAssetType ris.AssetType
+		wantAssetType eis.AssetType
 	}{
 		{
 			name:      "nil options returns nil asset",
@@ -32,16 +32,16 @@ func TestParser_CreateAssetFromOptions(t *testing.T) {
 			name: "AssetValue creates asset",
 			opts: &core.ParseOptions{
 				AssetValue: "github.com/org/repo",
-				AssetType:  ris.AssetTypeRepository,
+				AssetType:  eis.AssetTypeRepository,
 			},
 			wantAsset:     true,
 			wantAssetName: "github.com/org/repo",
-			wantAssetType: ris.AssetTypeRepository,
+			wantAssetType: eis.AssetTypeRepository,
 		},
 		{
 			name: "BranchInfo creates asset when AssetValue is empty",
 			opts: &core.ParseOptions{
-				BranchInfo: &ris.BranchInfo{
+				BranchInfo: &eis.BranchInfo{
 					RepositoryURL:   "gitlab.com/mygroup/myproject",
 					Name:            "develop",
 					CommitSHA:       "def456",
@@ -50,7 +50,7 @@ func TestParser_CreateAssetFromOptions(t *testing.T) {
 			},
 			wantAsset:     true,
 			wantAssetName: "gitlab.com/mygroup/myproject",
-			wantAssetType: ris.AssetTypeRepository,
+			wantAssetType: eis.AssetTypeRepository,
 		},
 	}
 
@@ -84,7 +84,7 @@ func TestParser_ParseWithAssetFromBranchInfo(t *testing.T) {
 	data := []byte(`{"version": "1.0.0", "results": []}`)
 
 	opts := &core.ParseOptions{
-		BranchInfo: &ris.BranchInfo{
+		BranchInfo: &eis.BranchInfo{
 			RepositoryURL:   "github.com/myorg/myrepo",
 			Name:            "main",
 			CommitSHA:       "abc123",
@@ -105,7 +105,7 @@ func TestParser_ParseWithAssetFromBranchInfo(t *testing.T) {
 	if asset.Value != "github.com/myorg/myrepo" {
 		t.Errorf("asset value = %q, want %q", asset.Value, "github.com/myorg/myrepo")
 	}
-	if asset.Type != ris.AssetTypeRepository {
-		t.Errorf("asset type = %q, want %q", asset.Type, ris.AssetTypeRepository)
+	if asset.Type != eis.AssetTypeRepository {
+		t.Errorf("asset type = %q, want %q", asset.Type, eis.AssetTypeRepository)
 	}
 }

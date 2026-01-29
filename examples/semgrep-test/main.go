@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/scanners"
-	"github.com/rediverio/sdk/pkg/scanners/semgrep"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/scanners"
+	"github.com/exploopio/sdk/pkg/scanners/semgrep"
 )
 
 func main() {
@@ -85,28 +85,28 @@ func main() {
 		}
 	}
 
-	// Parse to RIS format
-	fmt.Println("\n--- Converting to RIS ---")
+	// Parse to EIS format
+	fmt.Println("\n--- Converting to EIS ---")
 	parser := &semgrep.Parser{}
-	risReport, err := parser.Parse(ctx, result.RawOutput, &core.ParseOptions{
+	eisReport, err := parser.Parse(ctx, result.RawOutput, &core.ParseOptions{
 		AssetType:  "repository",
 		AssetValue: target,
 		Branch:     "main",
 	})
 	if err != nil {
-		fmt.Printf("Failed to convert to RIS: %v\n", err)
+		fmt.Printf("Failed to convert to EIS: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("✓ RIS Report generated\n")
-	fmt.Printf("  - Tool: %s v%s\n", risReport.Tool.Name, risReport.Tool.Version)
-	fmt.Printf("  - Findings: %d\n", len(risReport.Findings))
-	fmt.Printf("  - Assets: %d\n", len(risReport.Assets))
+	fmt.Printf("✓ EIS Report generated\n")
+	fmt.Printf("  - Tool: %s v%s\n", eisReport.Tool.Name, eisReport.Tool.Version)
+	fmt.Printf("  - Findings: %d\n", len(eisReport.Findings))
+	fmt.Printf("  - Assets: %d\n", len(eisReport.Assets))
 
 	// Print first finding as JSON sample
-	if len(risReport.Findings) > 0 {
-		fmt.Println("\n--- Sample RIS Finding (JSON) ---")
-		sample, _ := json.MarshalIndent(risReport.Findings[0], "", "  ")
+	if len(eisReport.Findings) > 0 {
+		fmt.Println("\n--- Sample EIS Finding (JSON) ---")
+		sample, _ := json.MarshalIndent(eisReport.Findings[0], "", "  ")
 		fmt.Println(string(sample))
 	}
 

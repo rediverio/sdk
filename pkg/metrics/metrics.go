@@ -1,4 +1,4 @@
-// Package metrics provides metrics collection and reporting for the Rediver SDK.
+// Package metrics provides metrics collection and reporting for the Exploop SDK.
 // It includes interfaces for metric collection and a Prometheus-compatible implementation.
 package metrics
 
@@ -65,26 +65,26 @@ type MetricDefinition struct {
 }
 
 // =============================================================================
-// Default Metrics - Standard metrics for Rediver SDK
+// Default Metrics - Standard metrics for Exploop SDK
 // =============================================================================
 
 var (
 	// Scanner metrics
 	ScannerScansTotal = MetricDefinition{
-		Name:   "rediverio_scanner_scans_total",
+		Name:   "exploop_scanner_scans_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of scans executed",
 		Labels: []string{"scanner", "status"},
 	}
 	ScannerScanDuration = MetricDefinition{
-		Name:    "rediverio_scanner_scan_duration_seconds",
+		Name:    "exploop_scanner_scan_duration_seconds",
 		Type:    MetricTypeHistogram,
 		Help:    "Duration of scans in seconds",
 		Labels:  []string{"scanner"},
 		Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600},
 	}
 	ScannerFindingsTotal = MetricDefinition{
-		Name:   "rediverio_scanner_findings_total",
+		Name:   "exploop_scanner_findings_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of findings discovered",
 		Labels: []string{"scanner", "severity"},
@@ -92,13 +92,13 @@ var (
 
 	// Collector metrics
 	CollectorCollectsTotal = MetricDefinition{
-		Name:   "rediverio_collector_collects_total",
+		Name:   "exploop_collector_collects_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of collections executed",
 		Labels: []string{"collector", "status"},
 	}
 	CollectorItemsTotal = MetricDefinition{
-		Name:   "rediverio_collector_items_total",
+		Name:   "exploop_collector_items_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of items collected",
 		Labels: []string{"collector"},
@@ -106,25 +106,25 @@ var (
 
 	// Pusher metrics
 	PusherPushesTotal = MetricDefinition{
-		Name:   "rediverio_pusher_pushes_total",
+		Name:   "exploop_pusher_pushes_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of push operations",
 		Labels: []string{"status"},
 	}
 	PusherFindingsPushed = MetricDefinition{
-		Name:   "rediverio_pusher_findings_pushed_total",
+		Name:   "exploop_pusher_findings_pushed_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of findings pushed",
 		Labels: []string{},
 	}
 	PusherAssetsPushed = MetricDefinition{
-		Name:   "rediverio_pusher_assets_pushed_total",
+		Name:   "exploop_pusher_assets_pushed_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of assets pushed",
 		Labels: []string{},
 	}
 	PusherRetries = MetricDefinition{
-		Name:   "rediverio_pusher_retries_total",
+		Name:   "exploop_pusher_retries_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of push retries",
 		Labels: []string{},
@@ -132,32 +132,32 @@ var (
 
 	// Agent metrics
 	AgentJobsTotal = MetricDefinition{
-		Name:   "rediverio_agent_jobs_total",
+		Name:   "exploop_agent_jobs_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of jobs processed",
 		Labels: []string{"job_type", "status"},
 	}
 	AgentJobDuration = MetricDefinition{
-		Name:    "rediverio_agent_job_duration_seconds",
+		Name:    "exploop_agent_job_duration_seconds",
 		Type:    MetricTypeHistogram,
 		Help:    "Duration of job execution in seconds",
 		Labels:  []string{"job_type"},
 		Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600},
 	}
 	AgentQueueSize = MetricDefinition{
-		Name:   "rediverio_agent_queue_size",
+		Name:   "exploop_agent_queue_size",
 		Type:   MetricTypeGauge,
 		Help:   "Current number of jobs in queue",
 		Labels: []string{},
 	}
 	AgentActiveJobs = MetricDefinition{
-		Name:   "rediverio_agent_active_jobs",
+		Name:   "exploop_agent_active_jobs",
 		Type:   MetricTypeGauge,
 		Help:   "Number of currently executing jobs",
 		Labels: []string{},
 	}
 	AgentHeartbeats = MetricDefinition{
-		Name:   "rediverio_agent_heartbeats_total",
+		Name:   "exploop_agent_heartbeats_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of heartbeats sent",
 		Labels: []string{"status"},
@@ -165,19 +165,19 @@ var (
 
 	// Enricher metrics
 	EnricherEnrichmentsTotal = MetricDefinition{
-		Name:   "rediverio_enricher_enrichments_total",
+		Name:   "exploop_enricher_enrichments_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of enrichment operations",
 		Labels: []string{"enricher", "status"},
 	}
 	EnricherCacheHits = MetricDefinition{
-		Name:   "rediverio_enricher_cache_hits_total",
+		Name:   "exploop_enricher_cache_hits_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of cache hits",
 		Labels: []string{"enricher"},
 	}
 	EnricherCacheMisses = MetricDefinition{
-		Name:   "rediverio_enricher_cache_misses_total",
+		Name:   "exploop_enricher_cache_misses_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of cache misses",
 		Labels: []string{"enricher"},
@@ -185,13 +185,13 @@ var (
 
 	// HTTP client metrics
 	HTTPRequestsTotal = MetricDefinition{
-		Name:   "rediverio_http_requests_total",
+		Name:   "exploop_http_requests_total",
 		Type:   MetricTypeCounter,
 		Help:   "Total number of HTTP requests made",
 		Labels: []string{"method", "host", "status"},
 	}
 	HTTPRequestDuration = MetricDefinition{
-		Name:    "rediverio_http_request_duration_seconds",
+		Name:    "exploop_http_request_duration_seconds",
 		Type:    MetricTypeHistogram,
 		Help:    "Duration of HTTP requests in seconds",
 		Labels:  []string{"method", "host"},
@@ -396,7 +396,7 @@ func GetDefaultCollector() Collector {
 
 type contextKey string
 
-const collectorContextKey contextKey = "rediverio_metrics_collector"
+const collectorContextKey contextKey = "exploop_metrics_collector"
 
 // WithCollector returns a new context with the collector attached.
 func WithCollector(ctx context.Context, collector Collector) context.Context {

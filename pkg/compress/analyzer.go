@@ -3,7 +3,7 @@ package compress
 import (
 	"encoding/json"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // Strategy represents the upload strategy based on payload analysis.
@@ -96,8 +96,8 @@ type AnalysisResult struct {
 	Reason string `json:"reason"`
 }
 
-// Analyze analyzes a RIS report and returns the recommended upload strategy.
-func (a *Analyzer) Analyze(report *ris.Report) (*AnalysisResult, error) {
+// Analyze analyzes a EIS report and returns the recommended upload strategy.
+func (a *Analyzer) Analyze(report *eis.Report) (*AnalysisResult, error) {
 	result := &AnalysisResult{
 		FindingsCount: len(report.Findings),
 		AssetsCount:   len(report.Assets),
@@ -173,7 +173,7 @@ func (a *Analyzer) determineStrategy(findingsCount, rawSize int) (Strategy, stri
 // AnalyzeBytes analyzes raw JSON bytes and returns the recommended strategy.
 // This is useful when you already have serialized data.
 func (a *Analyzer) AnalyzeBytes(data []byte) (*AnalysisResult, error) {
-	var report ris.Report
+	var report eis.Report
 	if err := json.Unmarshal(data, &report); err != nil {
 		return nil, err
 	}

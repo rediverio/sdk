@@ -1,4 +1,4 @@
-// Package client provides the Rediver API client.
+// Package client provides the Exploop API client.
 package client
 
 import (
@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/chunk"
-	"github.com/rediverio/sdk/pkg/compress"
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/retry"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/chunk"
+	"github.com/exploopio/sdk/pkg/compress"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/retry"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Client is the Rediver API client.
+// Client is the Exploop API client.
 // It implements the core.Pusher interface.
 type Client struct {
 	baseURL    string
@@ -65,7 +65,7 @@ type Config struct {
 
 	// Retry queue configuration (optional)
 	EnableRetryQueue bool          `yaml:"enable_retry_queue" json:"enable_retry_queue"`
-	RetryQueueDir    string        `yaml:"retry_queue_dir" json:"retry_queue_dir"`       // Default: ~/.rediver/retry-queue
+	RetryQueueDir    string        `yaml:"retry_queue_dir" json:"retry_queue_dir"`       // Default: ~/.exploop/retry-queue
 	RetryInterval    time.Duration `yaml:"retry_interval" json:"retry_interval"`         // Default: 5m
 	RetryMaxAttempts int           `yaml:"retry_max_attempts" json:"retry_max_attempts"` // Default: 10
 	RetryTTL         time.Duration `yaml:"retry_ttl" json:"retry_ttl"`                   // Default: 7d (168h)
@@ -83,7 +83,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// New creates a new Rediver API client.
+// New creates a new Exploop API client.
 func New(cfg *Config) *Client {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
@@ -137,7 +137,7 @@ type Option func(*Client)
 // Example:
 //
 //	client := client.NewWithOptions(
-//	    client.WithBaseURL("https://api.rediver.io"),
+//	    client.WithBaseURL("https://api.exploop.io"),
 //	    client.WithAPIKey("xxx"),
 //	    client.WithAgentID("agent-1"),
 //	    client.WithTimeout(30 * time.Second),
@@ -309,19 +309,19 @@ type HeartbeatRequest struct {
 	Region        string  `json:"region,omitempty"`
 }
 
-// PushFindings sends findings to Rediver.
+// PushFindings sends findings to Exploop.
 // If the push fails and a retry queue is configured, the report is queued for later retry.
-func (c *Client) PushFindings(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (c *Client) PushFindings(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	result, err := c.pushFindingsInternal(ctx, report)
 
 	// If push failed and retry queue is enabled, queue for retry
 	if err != nil && c.hasRetryQueue() {
 		if queueErr := c.queueForRetry(ctx, report, retry.ItemTypeFindings, err); queueErr != nil {
 			if c.verbose {
-				fmt.Printf("[rediver] Failed to queue for retry: %v\n", queueErr)
+				fmt.Printf("[exploop] Failed to queue for retry: %v\n", queueErr)
 			}
 		} else if c.verbose {
-			fmt.Printf("[rediver] Queued for retry due to: %v\n", err)
+			fmt.Printf("[exploop] Queued for retry due to: %v\n", err)
 		}
 	}
 
@@ -329,14 +329,14 @@ func (c *Client) PushFindings(ctx context.Context, report *ris.Report) (*core.Pu
 }
 
 // pushFindingsInternal performs the actual push without retry queue logic.
-func (c *Client) pushFindingsInternal(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (c *Client) pushFindingsInternal(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	url := fmt.Sprintf("%s/api/v1/agent/ingest", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Pushing %d findings to %s\n", len(report.Findings), url)
+		fmt.Printf("[exploop] Pushing %d findings to %s\n", len(report.Findings), url)
 	}
 
-	// Convert RIS Report to IngestInput format
+	// Convert EIS Report to IngestInput format
 	input := c.convertToIngestInput(report)
 
 	body, err := json.Marshal(input)
@@ -355,7 +355,7 @@ func (c *Client) pushFindingsInternal(ctx context.Context, report *ris.Report) (
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Push completed: %d findings created, %d updated\n",
+		fmt.Printf("[exploop] Push completed: %d findings created, %d updated\n",
 			resp.FindingsCreated, resp.FindingsUpdated)
 	}
 
@@ -375,19 +375,19 @@ func (c *Client) pushFindingsInternal(ctx context.Context, report *ris.Report) (
 	}, nil
 }
 
-// PushAssets sends assets to Rediver.
+// PushAssets sends assets to Exploop.
 // If the push fails and a retry queue is configured, the report is queued for later retry.
-func (c *Client) PushAssets(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (c *Client) PushAssets(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	result, err := c.pushAssetsInternal(ctx, report)
 
 	// If push failed and retry queue is enabled, queue for retry
 	if err != nil && c.hasRetryQueue() {
 		if queueErr := c.queueForRetry(ctx, report, retry.ItemTypeAssets, err); queueErr != nil {
 			if c.verbose {
-				fmt.Printf("[rediver] Failed to queue assets for retry: %v\n", queueErr)
+				fmt.Printf("[exploop] Failed to queue assets for retry: %v\n", queueErr)
 			}
 		} else if c.verbose {
-			fmt.Printf("[rediver] Queued assets for retry due to: %v\n", err)
+			fmt.Printf("[exploop] Queued assets for retry due to: %v\n", err)
 		}
 	}
 
@@ -395,14 +395,14 @@ func (c *Client) PushAssets(ctx context.Context, report *ris.Report) (*core.Push
 }
 
 // pushAssetsInternal performs the actual push without retry queue logic.
-func (c *Client) pushAssetsInternal(ctx context.Context, report *ris.Report) (*core.PushResult, error) {
+func (c *Client) pushAssetsInternal(ctx context.Context, report *eis.Report) (*core.PushResult, error) {
 	url := fmt.Sprintf("%s/api/v1/agent/ingest", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Pushing %d assets to %s\n", len(report.Assets), url)
+		fmt.Printf("[exploop] Pushing %d assets to %s\n", len(report.Assets), url)
 	}
 
-	// Convert RIS Report to IngestInput format (assets only)
+	// Convert EIS Report to IngestInput format (assets only)
 	input := c.convertToIngestInput(report)
 	input.Findings = nil // Clear findings for assets-only push
 
@@ -430,7 +430,7 @@ func (c *Client) pushAssetsInternal(ctx context.Context, report *ris.Report) (*c
 	}, nil
 }
 
-// SendHeartbeat sends a heartbeat to Rediver.
+// SendHeartbeat sends a heartbeat to Exploop.
 func (c *Client) SendHeartbeat(ctx context.Context, status *core.AgentStatus) error {
 	url := fmt.Sprintf("%s/api/v1/agent/heartbeat", c.baseURL)
 
@@ -460,7 +460,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, status *core.AgentStatus) er
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Heartbeat sent: %s\n", status.Status)
+		fmt.Printf("[exploop] Heartbeat sent: %s\n", status.Status)
 	}
 
 	return nil
@@ -520,7 +520,7 @@ func (c *Client) CheckFingerprints(ctx context.Context, fingerprints []string) (
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Fingerprint check: %d existing, %d missing\n",
+		fmt.Printf("[exploop] Fingerprint check: %d existing, %d missing\n",
 			len(resp.Existing), len(resp.Missing))
 	}
 
@@ -539,7 +539,7 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body []byte)
 			// Exponential backoff: delay * 2^(attempt-1)
 			backoff := c.retryDelay * time.Duration(1<<(attempt-1))
 			if c.verbose {
-				fmt.Printf("[rediver] Retrying request (attempt %d/%d) after %v\n", attempt, c.maxRetries, backoff)
+				fmt.Printf("[exploop] Retrying request (attempt %d/%d) after %v\n", attempt, c.maxRetries, backoff)
 			}
 
 			select {
@@ -583,7 +583,7 @@ func (c *Client) doRequestOnce(ctx context.Context, method, url string, body []b
 			requestBody = compressed
 			contentEncoding = c.compressor.ContentEncoding()
 			if c.verbose {
-				fmt.Printf("[rediver] Compressed request: %d -> %d bytes (%.1f%% savings)\n",
+				fmt.Printf("[exploop] Compressed request: %d -> %d bytes (%.1f%% savings)\n",
 					stats.OriginalSize, stats.CompressedSize, stats.Savings)
 			}
 		}
@@ -723,8 +723,8 @@ func (c *Client) SetVerbose(v bool) {
 	c.verbose = v
 }
 
-// convertToIngestInput converts a RIS Report to IngestInput format.
-func (c *Client) convertToIngestInput(report *ris.Report) *IngestInput {
+// convertToIngestInput converts a EIS Report to IngestInput format.
+func (c *Client) convertToIngestInput(report *eis.Report) *IngestInput {
 	// Generate scan ID if not provided
 	scanID := report.Metadata.ID
 	if scanID == "" {
@@ -854,7 +854,7 @@ func (c *Client) hasRetryQueue() bool {
 }
 
 // queueForRetry adds a report to the retry queue for later retry.
-func (c *Client) queueForRetry(ctx context.Context, report *ris.Report, itemType retry.ItemType, originalErr error) error {
+func (c *Client) queueForRetry(ctx context.Context, report *eis.Report, itemType retry.ItemType, originalErr error) error {
 	c.retryMu.RLock()
 	queue := c.retryQueue
 	c.retryMu.RUnlock()
@@ -929,7 +929,7 @@ func (c *Client) EnableRetryQueue(ctx context.Context, cfg *RetryQueueConfig) er
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Retry queue enabled (dir: %s)\n", cfg.Dir)
+		fmt.Printf("[exploop] Retry queue enabled (dir: %s)\n", cfg.Dir)
 	}
 
 	return nil
@@ -1036,7 +1036,7 @@ func (c *Client) ProcessRetryQueueNow(ctx context.Context) error {
 
 // PushReport implements retry.ReportPusher interface.
 // This is used by the retry worker to push items from the queue.
-func (c *Client) PushReport(ctx context.Context, report *ris.Report) error {
+func (c *Client) PushReport(ctx context.Context, report *eis.Report) error {
 	// Use internal methods to avoid re-queueing on failure
 	if len(report.Findings) > 0 {
 		_, err := c.pushFindingsInternal(ctx, report)
@@ -1052,7 +1052,7 @@ func (c *Client) PushReport(ctx context.Context, report *ris.Report) error {
 // RetryQueueConfig configures the retry queue.
 type RetryQueueConfig struct {
 	// Dir is the directory to store queue files.
-	// Default: ~/.rediver/retry-queue
+	// Default: ~/.exploop/retry-queue
 	Dir string
 
 	// MaxSize is the maximum number of items in the queue.
@@ -1162,12 +1162,12 @@ type PushExposuresResult struct {
 	EventsSkipped int `json:"events_skipped"`
 }
 
-// PushExposures sends exposure events to Rediver.
+// PushExposures sends exposure events to Exploop.
 func (c *Client) PushExposures(ctx context.Context, events []ExposureEvent) (*PushExposuresResult, error) {
 	url := fmt.Sprintf("%s/api/v1/exposures/ingest", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Pushing %d exposure events to %s\n", len(events), url)
+		fmt.Printf("[exploop] Pushing %d exposure events to %s\n", len(events), url)
 	}
 
 	input := struct {
@@ -1194,7 +1194,7 @@ func (c *Client) PushExposures(ctx context.Context, events []ExposureEvent) (*Pu
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Exposure push completed: %d created, %d updated\n",
+		fmt.Printf("[exploop] Exposure push completed: %d created, %d updated\n",
 			resp.EventsCreated, resp.EventsUpdated)
 	}
 
@@ -1222,7 +1222,7 @@ func (c *Client) GetEPSSScores(ctx context.Context, cveIDs []string) ([]EPSSScor
 	url := fmt.Sprintf("%s/api/v1/threatintel/epss", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Fetching EPSS scores for %d CVEs\n", len(cveIDs))
+		fmt.Printf("[exploop] Fetching EPSS scores for %d CVEs\n", len(cveIDs))
 	}
 
 	input := struct {
@@ -1273,7 +1273,7 @@ func (c *Client) GetKEVEntries(ctx context.Context, cveIDs []string) ([]KEVEntry
 	url := fmt.Sprintf("%s/api/v1/threatintel/kev", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Fetching KEV entries for %d CVEs\n", len(cveIDs))
+		fmt.Printf("[exploop] Fetching KEV entries for %d CVEs\n", len(cveIDs))
 	}
 
 	input := struct {
@@ -1325,7 +1325,7 @@ func (c *Client) UploadChunk(ctx context.Context, data *chunk.ChunkData) error {
 	url := fmt.Sprintf("%s/api/v1/agent/ingest/chunk", c.baseURL)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Uploading chunk %d/%d for report %s\n",
+		fmt.Printf("[exploop] Uploading chunk %d/%d for report %s\n",
 			data.ChunkIndex+1, data.TotalChunks, data.ReportID)
 	}
 
@@ -1390,7 +1390,7 @@ func (c *Client) UploadChunk(ctx context.Context, data *chunk.ChunkData) error {
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Chunk %d/%d uploaded: %d findings, %d assets\n",
+		fmt.Printf("[exploop] Chunk %d/%d uploaded: %d findings, %d assets\n",
 			data.ChunkIndex+1, data.TotalChunks, resp.FindingsCreated, resp.AssetsCreated)
 	}
 
@@ -1422,14 +1422,14 @@ func (c *Client) GetSuppressions(ctx context.Context) ([]SuppressionRule, error)
 	url := fmt.Sprintf("%s/api/v1/suppressions/active", c.baseURL)
 
 	if c.verbose {
-		fmt.Println("[rediver] Fetching suppression rules")
+		fmt.Println("[exploop] Fetching suppression rules")
 	}
 
 	data, err := c.doRequest(ctx, "GET", url, nil)
 	if err != nil {
 		// Non-fatal: suppressions are optional
 		if c.verbose {
-			fmt.Printf("[rediver] Warning: could not fetch suppressions: %v\n", err)
+			fmt.Printf("[exploop] Warning: could not fetch suppressions: %v\n", err)
 		}
 		return nil, nil
 	}
@@ -1443,7 +1443,7 @@ func (c *Client) GetSuppressions(ctx context.Context) ([]SuppressionRule, error)
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Fetched %d suppression rules\n", resp.Count)
+		fmt.Printf("[exploop] Fetched %d suppression rules\n", resp.Count)
 	}
 
 	return resp.Rules, nil
@@ -1451,12 +1451,12 @@ func (c *Client) GetSuppressions(ctx context.Context) ([]SuppressionRule, error)
 
 // FilterSuppressedFindings removes findings that match suppression rules.
 // This is used by the security gate to exclude false positives.
-func (c *Client) FilterSuppressedFindings(findings []ris.Finding, rules []SuppressionRule) []ris.Finding {
+func (c *Client) FilterSuppressedFindings(findings []eis.Finding, rules []SuppressionRule) []eis.Finding {
 	if len(rules) == 0 {
 		return findings
 	}
 
-	var filtered []ris.Finding
+	var filtered []eis.Finding
 	for _, f := range findings {
 		if !c.isFiningSuppressed(f, rules) {
 			filtered = append(filtered, f)
@@ -1467,7 +1467,7 @@ func (c *Client) FilterSuppressedFindings(findings []ris.Finding, rules []Suppre
 }
 
 // isFiningSuppressed checks if a finding matches any suppression rule.
-func (c *Client) isFiningSuppressed(f ris.Finding, rules []SuppressionRule) bool {
+func (c *Client) isFiningSuppressed(f eis.Finding, rules []SuppressionRule) bool {
 	for _, rule := range rules {
 		if c.matchesSuppressionRule(f, rule) {
 			return true
@@ -1479,7 +1479,7 @@ func (c *Client) isFiningSuppressed(f ris.Finding, rules []SuppressionRule) bool
 // matchesSuppressionRule checks if a finding matches a specific suppression rule.
 // Note: ToolName is not checked here because Finding doesn't have Tool info;
 // it should be checked at the Report level before calling this function.
-func (c *Client) matchesSuppressionRule(f ris.Finding, rule SuppressionRule) bool {
+func (c *Client) matchesSuppressionRule(f eis.Finding, rule SuppressionRule) bool {
 	// Check rule ID (supports wildcard suffix)
 	if rule.RuleID != "" {
 		if strings.HasSuffix(rule.RuleID, "*") {
@@ -1535,7 +1535,7 @@ func matchGlobPattern(pattern, path string) bool {
 // =============================================================================
 
 // EnrichFindings adds EPSS and KEV data to findings with CVE IDs.
-func (c *Client) EnrichFindings(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error) {
+func (c *Client) EnrichFindings(ctx context.Context, findings []eis.Finding) ([]eis.Finding, error) {
 	// Collect CVE IDs
 	cveIDs := make([]string, 0)
 	for _, f := range findings {
@@ -1563,7 +1563,7 @@ func (c *Client) EnrichFindings(ctx context.Context, findings []ris.Finding) ([]
 	}
 
 	// Enrich findings
-	result := make([]ris.Finding, len(findings))
+	result := make([]eis.Finding, len(findings))
 	for i, f := range findings {
 		result[i] = f
 		if f.Vulnerability != nil && f.Vulnerability.CVEID != "" {

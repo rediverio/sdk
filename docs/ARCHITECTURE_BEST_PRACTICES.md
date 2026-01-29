@@ -1,4 +1,4 @@
-# Rediver SDK - Architecture Best Practices
+# Exploop SDK - Architecture Best Practices
 
 Tài liệu này tổng hợp các best practices từ việc nghiên cứu:
 - code-secure-analyzer (framework core)
@@ -14,7 +14,7 @@ Tài liệu này tổng hợp các best practices từ việc nghiên cứu:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Rediver Agent                            │
+│                         Exploop Agent                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
@@ -47,7 +47,7 @@ Tài liệu này tổng hợp các best practices từ việc nghiên cứu:
 │ └──────────┘   └────┬─────┘   └──────────┘                     │
 │                     │                                           │
 │              ┌──────▼──────┐                                    │
-│              │ Rediver API │                                    │
+│              │ Exploop API │                                    │
 │              └─────────────┘                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -297,7 +297,7 @@ func formatComment(finding Finding) string {
 %s
 
 ---
-*Detected by Rediver Security Scanner*`,
+*Detected by Exploop Security Scanner*`,
         getSeverityEmoji(finding.Severity),
         finding.Severity,
         finding.Title,
@@ -703,7 +703,7 @@ testdata/
 
 ```bash
 # API Configuration
-API_URL=https://api.rediver.io
+API_URL=https://api.exploop.io
 API_KEY=your-api-key
 WORKER_ID=worker-123
 
@@ -731,7 +731,7 @@ agent:
   verbose: true
   scan_interval: 1h
 
-rediver:
+exploop:
   base_url: ${API_URL}
   api_key: ${API_KEY}
   worker_id: ${WORKER_ID}
@@ -808,8 +808,8 @@ targets:
 
 ```go
 import (
-    "github.com/rediverio/sdk/sdk/scanners"
-    "github.com/rediverio/sdk/sdk/scanners/gitleaks"
+    "github.com/exploopio/sdk/sdk/scanners"
+    "github.com/exploopio/sdk/sdk/scanners/gitleaks"
 )
 
 // Quick start - default configuration
@@ -836,7 +836,7 @@ result, err := scanner.Scan(ctx, "/path/to/repo", &core.SecretScanOptions{
 ### 13.2 Parser Usage
 
 ```go
-import "github.com/rediverio/sdk/sdk/scanners/gitleaks"
+import "github.com/exploopio/sdk/sdk/scanners/gitleaks"
 
 // Parse gitleaks JSON output to RIS format
 parser := &gitleaks.Parser{}

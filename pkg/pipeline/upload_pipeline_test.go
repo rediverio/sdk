@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // mockUploader implements Uploader for testing
 type mockUploader struct {
-	uploadFunc func(ctx context.Context, report *ris.Report) (*Result, error)
+	uploadFunc func(ctx context.Context, report *eis.Report) (*Result, error)
 	uploads    int32
 }
 
-func (m *mockUploader) Upload(ctx context.Context, report *ris.Report) (*Result, error) {
+func (m *mockUploader) Upload(ctx context.Context, report *eis.Report) (*Result, error) {
 	atomic.AddInt32(&m.uploads, 1)
 	if m.uploadFunc != nil {
 		return m.uploadFunc(ctx, report)
@@ -140,7 +140,7 @@ func TestPipeline_Submit(t *testing.T) {
 	ctx := context.Background()
 
 	// Submit before start should fail
-	_, err := p.Submit(&ris.Report{})
+	_, err := p.Submit(&eis.Report{})
 	if err == nil {
 		t.Error("Submit before start should fail")
 	}
@@ -150,9 +150,9 @@ func TestPipeline_Submit(t *testing.T) {
 	defer p.Stop(ctx)
 
 	// Submit should work
-	report := &ris.Report{
-		Tool: &ris.Tool{Name: "test-tool"},
-		Findings: []ris.Finding{
+	report := &eis.Report{
+		Tool: &eis.Tool{Name: "test-tool"},
+		Findings: []eis.Finding{
 			{Title: "Finding 1"},
 			{Title: "Finding 2"},
 		},
@@ -194,8 +194,8 @@ func TestPipeline_SubmitWithOptions(t *testing.T) {
 	p.Start(ctx)
 	defer p.Stop(ctx)
 
-	report := &ris.Report{
-		Tool: &ris.Tool{Name: "test-tool"},
+	report := &eis.Report{
+		Tool: &eis.Tool{Name: "test-tool"},
 	}
 
 	_, err := p.Submit(report,
@@ -229,7 +229,7 @@ func TestPipeline_SubmitWithOptions(t *testing.T) {
 func TestPipeline_QueueFull(t *testing.T) {
 	blockCh := make(chan struct{})
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			<-blockCh // Block forever until closed
 			return &Result{Status: "completed"}, nil
 		},
@@ -254,7 +254,7 @@ func TestPipeline_QueueFull(t *testing.T) {
 	// Third submit: goes to queue slot 2
 	// Fourth submit: queue full, should fail
 	for i := 0; i < 5; i++ {
-		_, err := p.Submit(&ris.Report{})
+		_, err := p.Submit(&eis.Report{})
 		if i >= 3 && err == nil {
 			t.Errorf("Submit %d should fail when queue is full", i)
 		}
@@ -264,7 +264,7 @@ func TestPipeline_QueueFull(t *testing.T) {
 func TestPipeline_Flush(t *testing.T) {
 	processed := int32(0)
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			time.Sleep(50 * time.Millisecond)
 			atomic.AddInt32(&processed, 1)
 			return &Result{Status: "completed"}, nil
@@ -282,7 +282,7 @@ func TestPipeline_Flush(t *testing.T) {
 
 	// Submit multiple reports
 	for i := 0; i < 5; i++ {
-		p.Submit(&ris.Report{})
+		p.Submit(&eis.Report{})
 	}
 
 	// Flush and wait
@@ -302,7 +302,7 @@ func TestPipeline_Flush(t *testing.T) {
 func TestPipeline_Retry(t *testing.T) {
 	attempts := int32(0)
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			n := atomic.AddInt32(&attempts, 1)
 			if n < 3 {
 				return nil, errors.New("temporary error")
@@ -332,7 +332,7 @@ func TestPipeline_Retry(t *testing.T) {
 	p.Start(ctx)
 	defer p.Stop(ctx)
 
-	p.Submit(&ris.Report{})
+	p.Submit(&eis.Report{})
 
 	// Wait for retries
 	time.Sleep(500 * time.Millisecond)
@@ -353,7 +353,7 @@ func TestPipeline_Retry(t *testing.T) {
 
 func TestPipeline_RetryExhausted(t *testing.T) {
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			return nil, errors.New("permanent error")
 		},
 	}
@@ -379,7 +379,7 @@ func TestPipeline_RetryExhausted(t *testing.T) {
 	p.Start(ctx)
 	defer p.Stop(ctx)
 
-	p.Submit(&ris.Report{})
+	p.Submit(&eis.Report{})
 
 	// Wait for retries
 	time.Sleep(500 * time.Millisecond)
@@ -412,7 +412,7 @@ func TestPipeline_GetStats(t *testing.T) {
 
 	// Submit some reports
 	for i := 0; i < 3; i++ {
-		p.Submit(&ris.Report{})
+		p.Submit(&eis.Report{})
 	}
 
 	// Wait for processing
@@ -431,7 +431,7 @@ func TestPipeline_GetStats(t *testing.T) {
 func TestPipeline_QueueLength(t *testing.T) {
 	blockCh := make(chan struct{})
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			<-blockCh
 			return &Result{Status: "completed"}, nil
 		},
@@ -450,9 +450,9 @@ func TestPipeline_QueueLength(t *testing.T) {
 	}()
 
 	// Submit a few items
-	p.Submit(&ris.Report{})
-	p.Submit(&ris.Report{})
-	p.Submit(&ris.Report{})
+	p.Submit(&eis.Report{})
+	p.Submit(&eis.Report{})
+	p.Submit(&eis.Report{})
 
 	// Give time for worker to pick up one
 	time.Sleep(50 * time.Millisecond)
@@ -492,7 +492,7 @@ func TestPipeline_Callbacks(t *testing.T) {
 	p.Start(ctx)
 	defer p.Stop(ctx)
 
-	p.Submit(&ris.Report{Tool: &ris.Tool{Name: "test"}})
+	p.Submit(&eis.Report{Tool: &eis.Tool{Name: "test"}})
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -532,7 +532,7 @@ func TestPipeline_ConcurrentSubmit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := p.Submit(&ris.Report{}); err == nil {
+			if _, err := p.Submit(&eis.Report{}); err == nil {
 				atomic.AddInt32(&submitted, 1)
 			}
 		}()
@@ -556,7 +556,7 @@ func TestPipeline_ConcurrentSubmit(t *testing.T) {
 func TestPipeline_StopDrainsQueue(t *testing.T) {
 	processed := int32(0)
 	uploader := &mockUploader{
-		uploadFunc: func(ctx context.Context, report *ris.Report) (*Result, error) {
+		uploadFunc: func(ctx context.Context, report *eis.Report) (*Result, error) {
 			atomic.AddInt32(&processed, 1)
 			return &Result{Status: "completed"}, nil
 		},
@@ -572,7 +572,7 @@ func TestPipeline_StopDrainsQueue(t *testing.T) {
 
 	// Submit items
 	for i := 0; i < 5; i++ {
-		p.Submit(&ris.Report{})
+		p.Submit(&eis.Report{})
 	}
 
 	// Stop should drain remaining items

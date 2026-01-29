@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/gitenv"
-	"github.com/rediverio/sdk/pkg/ris"
-	"github.com/rediverio/sdk/pkg/strategy"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/gitenv"
+	"github.com/exploopio/sdk/pkg/eis"
+	"github.com/exploopio/sdk/pkg/strategy"
 )
 
-// RemoteHandler sends scan results to a remote Rediver server.
+// RemoteHandler sends scan results to a remote Exploop server.
 // It also creates PR/MR comments for findings on changed files.
 type RemoteHandler struct {
 	pusher  core.Pusher
@@ -196,8 +196,8 @@ func (h *RemoteHandler) OnError(err error) error {
 	return nil
 }
 
-// formatCommentTitle formats the comment title from a ris.Finding.
-func formatCommentTitle(finding *ris.Finding) string {
+// formatCommentTitle formats the comment title from a eis.Finding.
+func formatCommentTitle(finding *eis.Finding) string {
 	if finding.Title != "" {
 		return finding.Title
 	}
@@ -207,8 +207,8 @@ func formatCommentTitle(finding *ris.Finding) string {
 	return "Security Finding"
 }
 
-// formatCommentBody formats the comment body as markdown from a ris.Finding.
-func formatCommentBody(finding *ris.Finding) string {
+// formatCommentBody formats the comment body as markdown from a eis.Finding.
+func formatCommentBody(finding *eis.Finding) string {
 	var parts []string
 
 	// Severity badge
@@ -247,21 +247,21 @@ func formatCommentBody(finding *ris.Finding) string {
 		}
 	}
 
-	parts = append(parts, "", "---", "*Detected by Rediver Security Scanner*")
+	parts = append(parts, "", "---", "*Detected by Exploop Security Scanner*")
 
 	return strings.Join(parts, "\n")
 }
 
 // getSeverityEmoji returns an emoji for the severity level.
-func getSeverityEmoji(severity ris.Severity) string {
+func getSeverityEmoji(severity eis.Severity) string {
 	switch severity {
-	case ris.SeverityCritical:
+	case eis.SeverityCritical:
 		return "\U0001F534" // Red circle
-	case ris.SeverityHigh:
+	case eis.SeverityHigh:
 		return "\U0001F7E0" // Orange circle
-	case ris.SeverityMedium:
+	case eis.SeverityMedium:
 		return "\U0001F7E1" // Yellow circle
-	case ris.SeverityLow:
+	case eis.SeverityLow:
 		return "\U0001F7E2" // Green circle
 	default:
 		return "\U0001F535" // Blue circle

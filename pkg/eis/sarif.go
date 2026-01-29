@@ -1,4 +1,4 @@
-package ris
+package eis
 
 import (
 	"crypto/sha256"
@@ -117,10 +117,10 @@ type SARIFInvocation struct {
 }
 
 // =============================================================================
-// SARIF to RIS Conversion
+// SARIF to EIS Conversion
 // =============================================================================
 
-// ConvertOptions configures SARIF to RIS conversion.
+// ConvertOptions configures SARIF to EIS conversion.
 type ConvertOptions struct {
 	// Asset to associate findings with
 	AssetType  AssetType
@@ -150,7 +150,7 @@ func DefaultConvertOptions() *ConvertOptions {
 	}
 }
 
-// FromSARIF converts SARIF log to RIS report.
+// FromSARIF converts SARIF log to EIS report.
 func FromSARIF(data []byte, opts *ConvertOptions) (*Report, error) {
 	if opts == nil {
 		opts = DefaultConvertOptions()
@@ -304,7 +304,7 @@ func FromSARIF(data []byte, opts *ConvertOptions) (*Report, error) {
 	return report, nil
 }
 
-// mapSARIFLevel converts SARIF level to RIS severity.
+// mapSARIFLevel converts SARIF level to EIS severity.
 func mapSARIFLevel(level string) Severity {
 	switch strings.ToLower(level) {
 	case "error":

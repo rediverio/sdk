@@ -1,4 +1,4 @@
-// Package github provides a GitHub connector for the Rediver SDK.
+// Package github provides a GitHub connector for the Exploop SDK.
 package github
 
 import (
@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rediverio/sdk/pkg/connectors"
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/connectors"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 const (

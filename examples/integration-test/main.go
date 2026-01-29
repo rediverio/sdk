@@ -1,6 +1,6 @@
-// Package main provides an integration test example for the Rediver SDK.
+// Package main provides an integration test example for the Exploop SDK.
 // This example demonstrates how to:
-// 1. Connect to the Rediver API
+// 1. Connect to the Exploop API
 // 2. Send heartbeat
 // 3. Push findings and assets
 // 4. Poll for commands
@@ -14,14 +14,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/client"
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/client"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 func main() {
 	// Parse command line flags
-	baseURL := flag.String("url", "http://localhost:8080", "Rediver API base URL")
+	baseURL := flag.String("url", "http://localhost:8080", "Exploop API base URL")
 	apiKey := flag.String("api-key", "", "API key for authentication")
 	agentID := flag.String("agent-id", "", "Agent ID (optional)")
 	verbose := flag.Bool("verbose", true, "Enable verbose output")
@@ -50,7 +50,7 @@ func main() {
 	c := client.New(cfg)
 	ctx := context.Background()
 
-	fmt.Println("=== Rediver SDK Integration Test ===")
+	fmt.Println("=== Exploop SDK Integration Test ===")
 	fmt.Printf("Base URL: %s\n", *baseURL)
 	fmt.Println()
 
@@ -165,11 +165,11 @@ func testPollCommands(ctx context.Context, c *client.Client) error {
 }
 
 // createSampleFindingsReport creates a sample report with findings.
-func createSampleFindingsReport() *ris.Report {
+func createSampleFindingsReport() *eis.Report {
 	now := time.Now()
 
-	report := ris.NewReport()
-	report.Metadata = ris.ReportMetadata{
+	report := eis.NewReport()
+	report.Metadata = eis.ReportMetadata{
 		ID:         fmt.Sprintf("scan-%d", now.Unix()),
 		Timestamp:  now,
 		DurationMs: 5000,
@@ -177,25 +177,25 @@ func createSampleFindingsReport() *ris.Report {
 		SourceRef:  "integration-test",
 	}
 
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:    "semgrep",
 		Version: "1.50.0",
 		Vendor:  "Semgrep Inc.",
 	}
 
 	// Add sample findings
-	report.Findings = []ris.Finding{
+	report.Findings = []eis.Finding{
 		{
 			ID:          "finding-1",
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       "SQL Injection vulnerability",
 			Description: "User input is directly concatenated into SQL query without proper sanitization.",
-			Severity:    ris.SeverityHigh,
+			Severity:    eis.SeverityHigh,
 			Confidence:  90,
 			Category:    "security",
 			RuleID:      "sql-injection",
 			RuleName:    "SQL Injection Detection",
-			Location: &ris.FindingLocation{
+			Location: &eis.FindingLocation{
 				Path:        "src/api/users.go",
 				StartLine:   45,
 				EndLine:     48,
@@ -203,10 +203,10 @@ func createSampleFindingsReport() *ris.Report {
 				EndColumn:   50,
 				Snippet:     `query := "SELECT * FROM users WHERE id = " + userID`,
 			},
-			Vulnerability: &ris.VulnerabilityDetails{
+			Vulnerability: &eis.VulnerabilityDetails{
 				CWEID: "CWE-89",
 			},
-			Remediation: &ris.Remediation{
+			Remediation: &eis.Remediation{
 				Recommendation: "Use parameterized queries instead of string concatenation",
 				Steps: []string{
 					"Replace string concatenation with prepared statements",
@@ -222,20 +222,20 @@ func createSampleFindingsReport() *ris.Report {
 		},
 		{
 			ID:          "finding-2",
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       "Hardcoded credentials detected",
 			Description: "API key is hardcoded in the source code.",
-			Severity:    ris.SeverityCritical,
+			Severity:    eis.SeverityCritical,
 			Confidence:  95,
 			Category:    "security",
 			RuleID:      "hardcoded-secret",
-			Location: &ris.FindingLocation{
+			Location: &eis.FindingLocation{
 				Path:      "src/config/config.go",
 				StartLine: 12,
 				EndLine:   12,
 				Snippet:   `apiKey := "sk_live_xxxxxxxxxxxxx"`,
 			},
-			Secret: &ris.SecretDetails{
+			Secret: &eis.SecretDetails{
 				SecretType:  "api_key",
 				Service:     "stripe",
 				MaskedValue: "sk_live_xxx...xxx",
@@ -245,18 +245,18 @@ func createSampleFindingsReport() *ris.Report {
 		},
 		{
 			ID:          "finding-3",
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       "Cross-Site Scripting (XSS)",
 			Description: "User input is rendered without escaping in HTML template.",
-			Severity:    ris.SeverityMedium,
+			Severity:    eis.SeverityMedium,
 			Confidence:  80,
 			RuleID:      "xss-reflected",
-			Location: &ris.FindingLocation{
+			Location: &eis.FindingLocation{
 				Path:      "templates/user.html",
 				StartLine: 25,
 				Snippet:   `<div>{{ .UserInput }}</div>`,
 			},
-			Vulnerability: &ris.VulnerabilityDetails{
+			Vulnerability: &eis.VulnerabilityDetails{
 				CWEID: "CWE-79",
 			},
 		},
@@ -266,32 +266,32 @@ func createSampleFindingsReport() *ris.Report {
 }
 
 // createSampleAssetsReport creates a sample report with assets only.
-func createSampleAssetsReport() *ris.Report {
+func createSampleAssetsReport() *eis.Report {
 	now := time.Now()
 
-	report := ris.NewReport()
-	report.Metadata = ris.ReportMetadata{
+	report := eis.NewReport()
+	report.Metadata = eis.ReportMetadata{
 		ID:         fmt.Sprintf("asset-discovery-%d", now.Unix()),
 		Timestamp:  now,
 		SourceType: "collector",
 	}
 
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:    "asset-collector",
 		Version: "1.0.0",
 	}
 
-	report.Assets = []ris.Asset{
+	report.Assets = []eis.Asset{
 		{
 			ID:          "asset-1",
-			Type:        ris.AssetTypeRepository,
+			Type:        eis.AssetTypeRepository,
 			Value:       "github.com/example/webapp",
 			Name:        "Web Application",
 			Description: "Main web application repository",
-			Criticality: ris.CriticalityHigh,
+			Criticality: eis.CriticalityHigh,
 			Tags:        []string{"production", "frontend"},
-			Technical: &ris.AssetTechnical{
-				Repository: &ris.RepositoryTechnical{
+			Technical: &eis.AssetTechnical{
+				Repository: &eis.RepositoryTechnical{
 					Platform:      "github",
 					Owner:         "example",
 					Name:          "webapp",
@@ -303,13 +303,13 @@ func createSampleAssetsReport() *ris.Report {
 		},
 		{
 			ID:          "asset-2",
-			Type:        ris.AssetTypeDomain,
+			Type:        eis.AssetTypeDomain,
 			Value:       "api.example.com",
 			Name:        "API Domain",
-			Criticality: ris.CriticalityCritical,
+			Criticality: eis.CriticalityCritical,
 			Tags:        []string{"production", "api"},
-			Technical: &ris.AssetTechnical{
-				Domain: &ris.DomainTechnical{
+			Technical: &eis.AssetTechnical{
+				Domain: &eis.DomainTechnical{
 					Registrar:   "Cloudflare",
 					Nameservers: []string{"ns1.cloudflare.com", "ns2.cloudflare.com"},
 				},
@@ -317,16 +317,16 @@ func createSampleAssetsReport() *ris.Report {
 		},
 		{
 			ID:          "asset-3",
-			Type:        ris.AssetTypeIPAddress,
+			Type:        eis.AssetTypeIPAddress,
 			Value:       "10.0.1.100",
 			Name:        "Database Server",
-			Criticality: ris.CriticalityCritical,
+			Criticality: eis.CriticalityCritical,
 			Tags:        []string{"internal", "database"},
-			Technical: &ris.AssetTechnical{
-				IPAddress: &ris.IPAddressTechnical{
+			Technical: &eis.AssetTechnical{
+				IPAddress: &eis.IPAddressTechnical{
 					Version:  4,
 					Hostname: "db-primary.internal",
-					Ports: []ris.PortInfo{
+					Ports: []eis.PortInfo{
 						{Port: 5432, Protocol: "tcp", Service: "postgresql", State: "open"},
 					},
 				},
@@ -338,47 +338,47 @@ func createSampleAssetsReport() *ris.Report {
 }
 
 // createCombinedReport creates a report with both assets and findings.
-func createCombinedReport() *ris.Report {
+func createCombinedReport() *eis.Report {
 	now := time.Now()
 
-	report := ris.NewReport()
-	report.Metadata = ris.ReportMetadata{
+	report := eis.NewReport()
+	report.Metadata = eis.ReportMetadata{
 		ID:         fmt.Sprintf("full-scan-%d", now.Unix()),
 		Timestamp:  now,
 		DurationMs: 30000,
 		SourceType: "scanner",
 	}
 
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:    "trivy",
 		Version: "0.48.0",
 		Vendor:  "Aqua Security",
 	}
 
 	// Add assets
-	report.Assets = []ris.Asset{
+	report.Assets = []eis.Asset{
 		{
 			ID:          "container-1",
-			Type:        ris.AssetTypeContainer,
+			Type:        eis.AssetTypeContainer,
 			Value:       "docker.io/example/app:v1.2.3",
 			Name:        "Application Container",
-			Criticality: ris.CriticalityHigh,
+			Criticality: eis.CriticalityHigh,
 			Tags:        []string{"production", "container"},
 		},
 	}
 
 	// Add findings referencing the asset
-	report.Findings = []ris.Finding{
+	report.Findings = []eis.Finding{
 		{
 			ID:          "vuln-1",
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       "CVE-2024-1234: Critical vulnerability in openssl",
 			Description: "A critical vulnerability in OpenSSL allows remote code execution.",
-			Severity:    ris.SeverityCritical,
+			Severity:    eis.SeverityCritical,
 			Confidence:  100,
 			RuleID:      "CVE-2024-1234",
 			AssetRef:    "container-1", // Reference to asset
-			Vulnerability: &ris.VulnerabilityDetails{
+			Vulnerability: &eis.VulnerabilityDetails{
 				CVEID:            "CVE-2024-1234",
 				CWEID:            "CWE-119",
 				CVSSVersion:      "3.1",
@@ -390,19 +390,19 @@ func createCombinedReport() *ris.Report {
 				Ecosystem:        "debian",
 				ExploitAvailable: true,
 			},
-			Remediation: &ris.Remediation{
+			Remediation: &eis.Remediation{
 				Recommendation: "Upgrade openssl to version 1.1.1w or later",
 				FixAvailable:   true,
 			},
 		},
 		{
 			ID:       "vuln-2",
-			Type:     ris.FindingTypeVulnerability,
+			Type:     eis.FindingTypeVulnerability,
 			Title:    "CVE-2024-5678: High severity in curl",
-			Severity: ris.SeverityHigh,
+			Severity: eis.SeverityHigh,
 			RuleID:   "CVE-2024-5678",
 			AssetRef: "container-1",
-			Vulnerability: &ris.VulnerabilityDetails{
+			Vulnerability: &eis.VulnerabilityDetails{
 				CVEID:           "CVE-2024-5678",
 				CVSSScore:       7.5,
 				Package:         "curl",

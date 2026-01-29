@@ -1,11 +1,11 @@
-package ris
+package eis
 
 import (
 	"slices"
 	"time"
 )
 
-// Report is the root RIS document containing assets and findings.
+// Report is the root EIS document containing assets and findings.
 type Report struct {
 	// Schema version (required)
 	Version string `json:"version"`
@@ -2103,7 +2103,7 @@ type Properties map[string]any
 // Factory Functions
 // =============================================================================
 
-// NewReport creates a new empty RIS report.
+// NewReport creates a new empty EIS report.
 func NewReport() *Report {
 	return &Report{
 		Version: "1.0",

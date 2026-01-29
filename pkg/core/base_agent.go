@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // =============================================================================
@@ -510,8 +510,8 @@ func (a *BaseAgent) runAllCollections(ctx context.Context) {
 	}
 }
 
-// parseResult parses scanner output to RIS format.
-func (a *BaseAgent) parseResult(ctx context.Context, scanner Scanner, result *ScanResult) (*ris.Report, error) {
+// parseResult parses scanner output to EIS format.
+func (a *BaseAgent) parseResult(ctx context.Context, scanner Scanner, result *ScanResult) (*eis.Report, error) {
 	// Try to find a parser that can handle this output
 	parser := a.parsers.FindParser(result.RawOutput)
 	if parser == nil {

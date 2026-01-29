@@ -10,7 +10,7 @@ stages:
 
 security-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - agent -tools semgrep,gitleaks,trivy -target . -auto-ci -verbose
   artifacts:

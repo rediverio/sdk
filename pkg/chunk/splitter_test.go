@@ -3,7 +3,7 @@ package chunk
 import (
 	"testing"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 func TestSplitter_NeedsChunking(t *testing.T) {
@@ -173,21 +173,21 @@ func TestSplitter_EstimateChunks(t *testing.T) {
 
 // Helper functions
 
-func createTestReport(findings, assets int) *ris.Report {
-	report := &ris.Report{
-		Tool: &ris.Tool{
+func createTestReport(findings, assets int) *eis.Report {
+	report := &eis.Report{
+		Tool: &eis.Tool{
 			Name:    "test-tool",
 			Version: "1.0.0",
 		},
-		Metadata: ris.ReportMetadata{
+		Metadata: eis.ReportMetadata{
 			ID: "test-report-id",
 		},
-		Assets:   make([]ris.Asset, assets),
-		Findings: make([]ris.Finding, findings),
+		Assets:   make([]eis.Asset, assets),
+		Findings: make([]eis.Finding, findings),
 	}
 
 	for i := 0; i < assets; i++ {
-		report.Assets[i] = ris.Asset{
+		report.Assets[i] = eis.Asset{
 			ID:   "asset-" + string(rune('a'+i)),
 			Type: "repository",
 			Name: "Test Asset " + string(rune('A'+i)),
@@ -195,7 +195,7 @@ func createTestReport(findings, assets int) *ris.Report {
 	}
 
 	for i := 0; i < findings; i++ {
-		report.Findings[i] = ris.Finding{
+		report.Findings[i] = eis.Finding{
 			RuleID:   "test-rule",
 			Title:    "Test Finding",
 			Severity: "high",
@@ -205,22 +205,22 @@ func createTestReport(findings, assets int) *ris.Report {
 	return report
 }
 
-func createTestReportWithAssetRefs(findings, assets int) *ris.Report {
-	report := &ris.Report{
-		Tool: &ris.Tool{
+func createTestReportWithAssetRefs(findings, assets int) *eis.Report {
+	report := &eis.Report{
+		Tool: &eis.Tool{
 			Name:    "test-tool",
 			Version: "1.0.0",
 		},
-		Metadata: ris.ReportMetadata{
+		Metadata: eis.ReportMetadata{
 			ID: "test-report-id",
 		},
-		Assets:   make([]ris.Asset, assets),
-		Findings: make([]ris.Finding, findings),
+		Assets:   make([]eis.Asset, assets),
+		Findings: make([]eis.Finding, findings),
 	}
 
 	// Create assets
 	for i := 0; i < assets; i++ {
-		report.Assets[i] = ris.Asset{
+		report.Assets[i] = eis.Asset{
 			ID:   "asset-" + string(rune('a'+i)),
 			Type: "repository",
 			Name: "Test Asset " + string(rune('A'+i)),
@@ -230,7 +230,7 @@ func createTestReportWithAssetRefs(findings, assets int) *ris.Report {
 	// Create findings with asset references
 	for i := 0; i < findings; i++ {
 		assetIndex := i % assets
-		report.Findings[i] = ris.Finding{
+		report.Findings[i] = eis.Finding{
 			RuleID:   "test-rule-" + string(rune('0'+i%10)),
 			Title:    "Test Finding",
 			Severity: "high",

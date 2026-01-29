@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/audit"
-	"github.com/rediverio/sdk/pkg/chunk"
-	"github.com/rediverio/sdk/pkg/pipeline"
-	"github.com/rediverio/sdk/pkg/resource"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/audit"
+	"github.com/exploopio/sdk/pkg/chunk"
+	"github.com/exploopio/sdk/pkg/pipeline"
+	"github.com/exploopio/sdk/pkg/resource"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // ClientConfig configures the PlatformClient.
@@ -585,7 +585,7 @@ func (a *PlatformAgent) Pipeline() *pipeline.Pipeline {
 // SubmitReport queues a report for async upload via the pipeline.
 // Returns immediately after queueing. Use Pipeline().GetStats() to monitor progress.
 // Returns an error if the pipeline is not configured.
-func (a *PlatformAgent) SubmitReport(report *ris.Report, opts ...pipeline.SubmitOption) (string, error) {
+func (a *PlatformAgent) SubmitReport(report *eis.Report, opts ...pipeline.SubmitOption) (string, error) {
 	if a.uploadPipeline == nil {
 		return "", fmt.Errorf("upload pipeline not configured")
 	}
@@ -617,7 +617,7 @@ func (a *PlatformAgent) ChunkManager() *chunk.Manager {
 
 // NeedsChunking checks if a report should be uploaded via chunking.
 // Returns false if chunk manager is not configured.
-func (a *PlatformAgent) NeedsChunking(report *ris.Report) bool {
+func (a *PlatformAgent) NeedsChunking(report *eis.Report) bool {
 	if a.chunkManager == nil {
 		return false
 	}
@@ -627,7 +627,7 @@ func (a *PlatformAgent) NeedsChunking(report *ris.Report) bool {
 // SubmitChunkedReport queues a large report for chunked upload.
 // The report will be split into chunks, compressed, and uploaded in the background.
 // Returns an error if the chunk manager is not configured.
-func (a *PlatformAgent) SubmitChunkedReport(ctx context.Context, report *ris.Report) (*chunk.Report, error) {
+func (a *PlatformAgent) SubmitChunkedReport(ctx context.Context, report *eis.Report) (*chunk.Report, error) {
 	if a.chunkManager == nil {
 		return nil, fmt.Errorf("chunk manager not configured")
 	}
@@ -642,7 +642,7 @@ func (a *PlatformAgent) SubmitChunkedReport(ctx context.Context, report *ris.Rep
 // - For pipeline submissions: (pipelineItemID, nil, nil)
 // - For chunked submissions: ("", chunkReport, nil)
 // - If neither is configured: ("", nil, error)
-func (a *PlatformAgent) SmartSubmitReport(ctx context.Context, report *ris.Report, opts ...pipeline.SubmitOption) (string, *chunk.Report, error) {
+func (a *PlatformAgent) SmartSubmitReport(ctx context.Context, report *eis.Report, opts ...pipeline.SubmitOption) (string, *chunk.Report, error) {
 	// Check if report needs chunking
 	if a.NeedsChunking(report) {
 		if a.chunkManager == nil {

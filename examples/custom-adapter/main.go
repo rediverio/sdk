@@ -1,7 +1,7 @@
 // Example: Using the SARIF Adapter
 //
 // This example demonstrates how to use the SARIF adapter to convert
-// SARIF output from any security tool to RIS format.
+// SARIF output from any security tool to EIS format.
 package main
 
 import (
@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rediverio/sdk/pkg/adapters/sarif"
-	"github.com/rediverio/sdk/pkg/client"
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/adapters/sarif"
+	"github.com/exploopio/sdk/pkg/client"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Convert to RIS
+	// Convert to EIS
 	report, err := adapter.Convert(ctx, sarifData, &core.AdapterOptions{
 		SourceName:  "custom-scanner",
 		Repository:  "owner/repo",
@@ -77,7 +77,7 @@ func main() {
 		}
 	}
 
-	// Push to Rediver platform
+	// Push to Exploop platform
 	if os.Getenv("API_URL") != "" {
 		apiClient := client.New(&client.Config{
 			BaseURL: os.Getenv("API_URL"),

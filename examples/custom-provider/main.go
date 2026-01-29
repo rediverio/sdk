@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rediverio/sdk/pkg/client"
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/providers/github"
+	"github.com/exploopio/sdk/pkg/client"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/providers/github"
 )
 
 func main() {
@@ -76,7 +76,7 @@ func main() {
 		}
 	}
 
-	// Push results to Rediver platform
+	// Push results to Exploop platform
 	if os.Getenv("API_URL") != "" {
 		apiClient := client.New(&client.Config{
 			BaseURL: os.Getenv("API_URL"),

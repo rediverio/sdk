@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 // Ensure Client implements core.CommandClient
@@ -35,7 +35,7 @@ func (c *Client) PollCommands(ctx context.Context, limit int) ([]Command, error)
 	url := fmt.Sprintf("%s/api/v1/agent/commands?limit=%d", c.baseURL, limit)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Polling commands from %s\n", url)
+		fmt.Printf("[exploop] Polling commands from %s\n", url)
 	}
 
 	data, err := c.doRequest(ctx, "GET", url, nil)
@@ -49,7 +49,7 @@ func (c *Client) PollCommands(ctx context.Context, limit int) ([]Command, error)
 	}
 
 	if c.verbose {
-		fmt.Printf("[rediver] Received %d commands\n", len(commands))
+		fmt.Printf("[exploop] Received %d commands\n", len(commands))
 	}
 
 	return commands, nil
@@ -83,7 +83,7 @@ func (c *Client) AcknowledgeCommand(ctx context.Context, cmdID string) error {
 	url := fmt.Sprintf("%s/api/v1/agent/commands/%s/acknowledge", c.baseURL, cmdID)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Acknowledging command %s\n", cmdID)
+		fmt.Printf("[exploop] Acknowledging command %s\n", cmdID)
 	}
 
 	_, err := c.doRequest(ctx, "POST", url, nil)
@@ -95,7 +95,7 @@ func (c *Client) StartCommand(ctx context.Context, cmdID string) error {
 	url := fmt.Sprintf("%s/api/v1/agent/commands/%s/start", c.baseURL, cmdID)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Starting command %s\n", cmdID)
+		fmt.Printf("[exploop] Starting command %s\n", cmdID)
 	}
 
 	_, err := c.doRequest(ctx, "POST", url, nil)
@@ -107,7 +107,7 @@ func (c *Client) CompleteCommand(ctx context.Context, cmdID string, result json.
 	url := fmt.Sprintf("%s/api/v1/agent/commands/%s/complete", c.baseURL, cmdID)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Completing command %s\n", cmdID)
+		fmt.Printf("[exploop] Completing command %s\n", cmdID)
 	}
 
 	payload := map[string]interface{}{}
@@ -125,7 +125,7 @@ func (c *Client) FailCommand(ctx context.Context, cmdID string, errorMsg string)
 	url := fmt.Sprintf("%s/api/v1/agent/commands/%s/fail", c.baseURL, cmdID)
 
 	if c.verbose {
-		fmt.Printf("[rediver] Failing command %s: %s\n", cmdID, errorMsg)
+		fmt.Printf("[exploop] Failing command %s: %s\n", cmdID, errorMsg)
 	}
 
 	payload := map[string]interface{}{
@@ -151,7 +151,7 @@ func (c *Client) ReportCommandProgress(ctx context.Context, cmdID string, progre
 	// Note: Progress reporting is not supported in current backend API
 	// This is a placeholder for future implementation
 	if c.verbose {
-		fmt.Printf("[rediver] Progress for command %s: %d%% - %s\n", cmdID, progress, message)
+		fmt.Printf("[exploop] Progress for command %s: %d%% - %s\n", cmdID, progress, message)
 	}
 	return nil
 }

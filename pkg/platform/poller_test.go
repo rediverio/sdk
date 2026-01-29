@@ -191,7 +191,7 @@ func TestValidateTokenTenantClaim(t *testing.T) {
 		},
 		{
 			name:             "token missing tenant_id claim",
-			token:            createMockJWT(map[string]interface{}{"iss": "rediver"}),
+			token:            createMockJWT(map[string]interface{}{"iss": "exploop"}),
 			expectedTenantID: "tenant-123",
 			wantError:        true,
 			errMsg:           "missing tenant_id claim",

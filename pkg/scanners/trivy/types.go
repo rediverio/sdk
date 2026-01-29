@@ -237,7 +237,7 @@ type License struct {
 // Helper Types
 // =============================================================================
 
-// SeverityMapping maps Trivy severity to RIS severity.
+// SeverityMapping maps Trivy severity to EIS severity.
 var SeverityMapping = map[string]string{
 	"CRITICAL": "critical",
 	"HIGH":     "high",
@@ -246,7 +246,7 @@ var SeverityMapping = map[string]string{
 	"UNKNOWN":  "info",
 }
 
-// GetRISSeverity converts Trivy severity to RIS severity.
+// GetRISSeverity converts Trivy severity to EIS severity.
 func GetRISSeverity(trivySeverity string) string {
 	if s, ok := SeverityMapping[trivySeverity]; ok {
 		return s
@@ -284,7 +284,7 @@ func GetBestCVSSScore(cvss map[string]CVSSData) (float64, string, string) {
 	return 0, "", ""
 }
 
-// ClassToFindingType maps Trivy class to RIS finding type.
+// ClassToFindingType maps Trivy class to EIS finding type.
 func ClassToFindingType(class string) string {
 	switch class {
 	case "os-pkgs", "lang-pkgs":

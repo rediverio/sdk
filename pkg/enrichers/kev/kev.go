@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 const (
@@ -106,9 +106,9 @@ func (e *Enricher) Name() string {
 }
 
 // Enrich adds KEV data to a single finding.
-func (e *Enricher) Enrich(ctx context.Context, finding *ris.Finding) (*ris.Finding, error) {
+func (e *Enricher) Enrich(ctx context.Context, finding *eis.Finding) (*eis.Finding, error) {
 	// Only enrich vulnerabilities with CVE IDs
-	if finding.Type != ris.FindingTypeVulnerability {
+	if finding.Type != eis.FindingTypeVulnerability {
 		return finding, nil
 	}
 	if finding.Vulnerability == nil || finding.Vulnerability.CVEID == "" {
@@ -155,8 +155,8 @@ func (e *Enricher) Enrich(ctx context.Context, finding *ris.Finding) (*ris.Findi
 	}
 
 	// Increase severity for KEV entries
-	if finding.Severity == ris.SeverityMedium || finding.Severity == ris.SeverityHigh {
-		finding.Severity = ris.SeverityCritical
+	if finding.Severity == eis.SeverityMedium || finding.Severity == eis.SeverityHigh {
+		finding.Severity = eis.SeverityCritical
 		finding.Properties["severity_elevated_by_kev"] = true
 	}
 
@@ -164,7 +164,7 @@ func (e *Enricher) Enrich(ctx context.Context, finding *ris.Finding) (*ris.Findi
 }
 
 // EnrichBatch adds KEV data to multiple findings.
-func (e *Enricher) EnrichBatch(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error) {
+func (e *Enricher) EnrichBatch(ctx context.Context, findings []eis.Finding) ([]eis.Finding, error) {
 	// Ensure cache is loaded
 	if err := e.ensureLoaded(ctx); err != nil {
 		if e.Verbose {
@@ -174,7 +174,7 @@ func (e *Enricher) EnrichBatch(ctx context.Context, findings []ris.Finding) ([]r
 	}
 
 	// Enrich each finding
-	enriched := make([]ris.Finding, len(findings))
+	enriched := make([]eis.Finding, len(findings))
 	for i, f := range findings {
 		result, _ := e.Enrich(ctx, &f)
 		enriched[i] = *result

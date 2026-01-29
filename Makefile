@@ -1,5 +1,5 @@
 # =============================================================================
-# Rediver SDK Makefile
+# Exploop SDK Makefile
 # =============================================================================
 # Go library for building security scanning integrations
 # =============================================================================
@@ -92,7 +92,7 @@ clean: ## Clean build artifacts
 # =============================================================================
 
 help: ## Show this help
-	@echo "Rediver SDK - Make targets:"
+	@echo "Exploop SDK - Make targets:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""

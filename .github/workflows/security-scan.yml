@@ -1,5 +1,5 @@
 # =============================================================================
-# Security Scanning with Rediver Agent
+# Security Scanning with Exploop Agent
 # =============================================================================
 # Runs security scans on pull requests and pushes to main
 #
@@ -8,7 +8,7 @@
 #   - Secret detection with Gitleaks
 #   - SCA with Trivy
 #   - Automatic PR comments for findings
-#   - Results pushed to Rediver platform (optional)
+#   - Results pushed to Exploop platform (optional)
 # =============================================================================
 
 name: Security Scan
@@ -24,17 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write  # For PR comments
-      security-events: write  # For SARIF upload
+      pull-requests: write # For PR comments
+      security-events: write # For SARIF upload
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for diff-based scanning
+          fetch-depth: 0 # Full history for diff-based scanning
 
-      - name: Run Rediver Agent
-        uses: docker://rediverio/agent:ci
+      - name: Run Exploop Agent
+        uses: docker://exploopio/agent:ci
         with:
           args: >-
             -tools semgrep,gitleaks,trivy
@@ -79,7 +79,7 @@ jobs:
           docker build -t agent:scan -f docker/Dockerfile .
 
       - name: Scan container image
-        uses: docker://rediverio/agent:ci
+        uses: docker://exploopio/agent:ci
         with:
           args: >-
             -tool trivy-image

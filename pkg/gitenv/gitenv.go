@@ -28,7 +28,7 @@ type GitEnv interface {
 	// CanonicalRepoName returns the full canonical repository name including the provider domain.
 	// Format: {domain}/{owner}/{repo}
 	// Examples:
-	//   - github.com/rediverio/api
+	//   - github.com/exploopio/api
 	//   - gitlab.com/myorg/myrepo
 	// This ensures unique asset identification across different Git providers.
 	CanonicalRepoName() string

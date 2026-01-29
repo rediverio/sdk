@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Parser converts Nuclei output to RIS format.
+// Parser converts Nuclei output to EIS format.
 type Parser struct {
 	Verbose bool
 }
@@ -23,8 +23,8 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// Parse converts Nuclei JSON Lines output to RIS Report.
-func (p *Parser) Parse(data []byte, target string) (*ris.Report, error) {
+// Parse converts Nuclei JSON Lines output to EIS Report.
+func (p *Parser) Parse(data []byte, target string) (*eis.Report, error) {
 	results, err := p.parseJSONLines(data)
 	if err != nil {
 		return nil, err
@@ -33,8 +33,8 @@ func (p *Parser) Parse(data []byte, target string) (*ris.Report, error) {
 	return p.toRISReport(results, target), nil
 }
 
-// ParseResults converts parsed Nuclei results to RIS Report.
-func (p *Parser) ParseResults(results []Result, target string) *ris.Report {
+// ParseResults converts parsed Nuclei results to EIS Report.
+func (p *Parser) ParseResults(results []Result, target string) *eis.Report {
 	return p.toRISReport(results, target)
 }
 
@@ -72,13 +72,13 @@ func (p *Parser) parseJSONLines(data []byte) ([]Result, error) {
 	return results, nil
 }
 
-// toRISReport converts Nuclei results to RIS Report format.
-func (p *Parser) toRISReport(results []Result, target string) *ris.Report {
-	report := ris.NewReport()
+// toRISReport converts Nuclei results to EIS Report format.
+func (p *Parser) toRISReport(results []Result, target string) *eis.Report {
+	report := eis.NewReport()
 	report.Metadata.SourceType = "scanner"
 	report.Metadata.Timestamp = time.Now()
 
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:         "nuclei",
 		Vendor:       "ProjectDiscovery",
 		InfoURL:      "https://github.com/projectdiscovery/nuclei",
@@ -101,7 +101,7 @@ func (p *Parser) toRISReport(results []Result, target string) *ris.Report {
 }
 
 // getOrCreateAsset creates or retrieves an asset for the result.
-func (p *Parser) getOrCreateAsset(report *ris.Report, result Result, assetMap map[string]string) string {
+func (p *Parser) getOrCreateAsset(report *eis.Report, result Result, assetMap map[string]string) string {
 	// Determine asset key (host or URL)
 	key := result.Host
 	if result.URL != "" {
@@ -117,25 +117,25 @@ func (p *Parser) getOrCreateAsset(report *ris.Report, result Result, assetMap ma
 	assetID := fmt.Sprintf("asset-%d", len(report.Assets))
 	assetMap[key] = assetID
 
-	assetType := ris.AssetTypeDomain
+	assetType := eis.AssetTypeDomain
 	assetValue := result.Host
 
 	// Determine asset type based on result
 	if result.IP != "" {
-		assetType = ris.AssetTypeIPAddress
+		assetType = eis.AssetTypeIPAddress
 		assetValue = result.IP
 	} else if result.URL != "" {
-		assetType = ris.AssetTypeService
+		assetType = eis.AssetTypeService
 		assetValue = result.URL
 	}
 
-	asset := ris.Asset{
+	asset := eis.Asset{
 		ID:         assetID,
 		Type:       assetType,
 		Value:      assetValue,
 		Name:       key,
 		Confidence: 90,
-		Properties: make(ris.Properties),
+		Properties: make(eis.Properties),
 	}
 
 	// Add technical details
@@ -150,18 +150,18 @@ func (p *Parser) getOrCreateAsset(report *ris.Report, result Result, assetMap ma
 	return assetID
 }
 
-// toRISFinding converts a Nuclei result to RIS Finding.
-func (p *Parser) toRISFinding(result Result, assetRef string, index int) ris.Finding {
+// toRISFinding converts a Nuclei result to EIS Finding.
+func (p *Parser) toRISFinding(result Result, assetRef string, index int) eis.Finding {
 	findingID := fmt.Sprintf("finding-%d", index)
 
 	// Determine finding type
-	findingType := ris.FindingTypeVulnerability
+	findingType := eis.FindingTypeVulnerability
 	if containsAny(result.Info.Tags, "misconfig", "config", "exposure") {
-		findingType = ris.FindingTypeMisconfiguration
+		findingType = eis.FindingTypeMisconfiguration
 	}
 
 	// Map severity
-	severity := ris.Severity(GetRISSeverity(result.Info.Severity))
+	severity := eis.Severity(GetRISSeverity(result.Info.Severity))
 
 	// Build title
 	title := result.Info.Name
@@ -169,7 +169,7 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) ris.Fin
 		title = result.TemplateID
 	}
 
-	finding := ris.Finding{
+	finding := eis.Finding{
 		ID:          findingID,
 		Type:        findingType,
 		Title:       title,
@@ -183,7 +183,7 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) ris.Fin
 		Tags:        result.Info.Tags,
 		References:  result.Info.Reference,
 		Fingerprint: p.generateFingerprint(result),
-		Properties:  make(ris.Properties),
+		Properties:  make(eis.Properties),
 	}
 
 	// Set location based on matched URL
@@ -192,14 +192,14 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) ris.Fin
 		if location == "" {
 			location = result.URL
 		}
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path: location,
 		}
 	}
 
 	// Add vulnerability details if classification exists
 	if result.Info.Classification != nil {
-		finding.Vulnerability = &ris.VulnerabilityDetails{}
+		finding.Vulnerability = &eis.VulnerabilityDetails{}
 
 		if len(result.Info.Classification.CVEId) > 0 {
 			finding.Vulnerability.CVEID = result.Info.Classification.CVEId[0]
@@ -220,7 +220,7 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) ris.Fin
 
 	// Add remediation if available
 	if result.Info.Remediation != "" {
-		finding.Remediation = &ris.Remediation{
+		finding.Remediation = &eis.Remediation{
 			Recommendation: result.Info.Remediation,
 		}
 	}

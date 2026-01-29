@@ -1,6 +1,6 @@
 # GitHub Actions Examples
 
-Examples for integrating Rediver Agent into GitHub Actions workflows.
+Examples for integrating Exploop Agent into GitHub Actions workflows.
 
 ## Quick Start
 
@@ -32,7 +32,7 @@ When running in a PR context, findings are posted as inline comments on the chan
 
 ```yaml
 - name: Run scan
-  uses: docker://rediverio/agent:ci
+  uses: docker://exploopio/agent:ci
   with:
     args: -tools semgrep -target . -auto-ci -comments
   env:
@@ -88,7 +88,7 @@ args: >-
   -output results.json              # Output file
   -sarif                            # Generate SARIF
   -sarif-output results.sarif       # SARIF output file
-  -push                             # Push to Rediver platform
+  -push                             # Push to Exploop platform
 ```
 
 ## Fail on Critical Findings

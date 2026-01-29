@@ -1,4 +1,4 @@
-// Package credentials provides credential management for the Rediver SDK.
+// Package credentials provides credential management for the Exploop SDK.
 // It includes interfaces for credential storage and retrieval, with
 // implementations for environment variables, files, and external vaults.
 package credentials
@@ -101,7 +101,7 @@ func (c *Credential) IsExpired() bool {
 // EnvStore implements Store using environment variables.
 // It's the simplest store implementation and suitable for CI/CD environments.
 type EnvStore struct {
-	// Prefix is prepended to all key lookups (e.g., "REDIVER_")
+	// Prefix is prepended to all key lookups (e.g., "EXPLOOP_")
 	Prefix string
 
 	// Mapping overrides key-to-env-var mapping
@@ -520,8 +520,8 @@ var defaultStore Store
 var defaultStoreMu sync.RWMutex
 
 func init() {
-	// Default to environment store with REDIVERIO_ prefix
-	defaultStore = NewEnvStore("REDIVERIO_")
+	// Default to environment store with EXPLOOPIO_ prefix
+	defaultStore = NewEnvStore("EXPLOOPIO_")
 }
 
 // SetDefaultStore sets the global default credential store.
@@ -529,7 +529,7 @@ func SetDefaultStore(store Store) {
 	defaultStoreMu.Lock()
 	defer defaultStoreMu.Unlock()
 	if store == nil {
-		store = NewEnvStore("REDIVERIO_")
+		store = NewEnvStore("EXPLOOPIO_")
 	}
 	defaultStore = store
 }
@@ -570,7 +570,7 @@ func GetValue(ctx context.Context, key string) (string, error) {
 
 type contextKey string
 
-const storeContextKey contextKey = "rediverio_credential_store"
+const storeContextKey contextKey = "exploop_credential_store"
 
 // WithStore returns a new context with the store attached.
 func WithStore(ctx context.Context, store Store) context.Context {

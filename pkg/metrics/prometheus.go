@@ -34,7 +34,7 @@ type PrometheusCollector struct {
 
 // PrometheusConfig configures the Prometheus collector.
 type PrometheusConfig struct {
-	// Namespace prefixes all metric names (e.g., "rediver")
+	// Namespace prefixes all metric names (e.g., "exploop")
 	Namespace string
 
 	// Subsystem prefixes metric names after namespace (e.g., "agent")
@@ -43,7 +43,7 @@ type PrometheusConfig struct {
 	// Registry is the Prometheus registry to use (nil = new registry)
 	Registry *prometheus.Registry
 
-	// RegisterDefaultMetrics registers standard Rediver SDK metrics
+	// RegisterDefaultMetrics registers standard Exploop SDK metrics
 	RegisterDefaultMetrics bool
 }
 
@@ -78,7 +78,7 @@ func NewPrometheusCollector(cfg *PrometheusConfig) *PrometheusCollector {
 	return c
 }
 
-// registerDefaultMetrics registers the standard Rediver SDK metrics.
+// registerDefaultMetrics registers the standard Exploop SDK metrics.
 func (c *PrometheusCollector) registerDefaultMetrics() {
 	// Scanner metrics
 	_ = c.RegisterCounter(ScannerScansTotal)

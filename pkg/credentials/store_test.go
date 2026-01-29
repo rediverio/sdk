@@ -362,7 +362,7 @@ func TestDefaultStore(t *testing.T) {
 		t.Error("Default store should be the custom store")
 	}
 
-	// Set nil should reset to EnvStore with REDIVERIO_ prefix
+	// Set nil should reset to EnvStore with EXPLOOPIO_ prefix
 	SetDefaultStore(nil)
 	if _, ok := GetDefaultStore().(*EnvStore); !ok {
 		t.Error("Default store should be EnvStore after setting nil")
@@ -387,8 +387,8 @@ func TestGetValue(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up env var
-	os.Setenv("REDIVERIO_TEST_VALUE", "my-value")
-	defer os.Unsetenv("REDIVERIO_TEST_VALUE")
+	os.Setenv("EXPLOOPIO_TEST_VALUE", "my-value")
+	defer os.Unsetenv("EXPLOOPIO_TEST_VALUE")
 
 	value, err := GetValue(ctx, "test.value")
 	if err != nil {

@@ -35,8 +35,8 @@ func TestDefaultLoggerConfig(t *testing.T) {
 		t.Errorf("FlushInterval = %v, want 5s", cfg.FlushInterval)
 	}
 
-	if !strings.Contains(cfg.LogFile, ".rediver") {
-		t.Errorf("LogFile should contain .rediver directory")
+	if !strings.Contains(cfg.LogFile, ".exploop") {
+		t.Errorf("LogFile should contain .exploop directory")
 	}
 }
 

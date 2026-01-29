@@ -1,4 +1,4 @@
-// Package core provides the core interfaces and base implementations for the Rediver Scanner SDK.
+// Package core provides the core interfaces and base implementations for the Exploop Scanner SDK.
 package core
 
 import (
@@ -17,7 +17,7 @@ import (
 // TemplateCacheConfig configures the template cache.
 type TemplateCacheConfig struct {
 	// CacheDir is the base directory for cached templates.
-	// Default: ~/.rediverio/templates
+	// Default: ~/.exploop/templates
 	CacheDir string
 
 	// MaxCacheAge is the maximum age of cached templates before cleanup.
@@ -40,7 +40,7 @@ type TemplateCacheConfig struct {
 func DefaultTemplateCacheConfig() *TemplateCacheConfig {
 	homeDir, _ := os.UserHomeDir()
 	return &TemplateCacheConfig{
-		CacheDir:        filepath.Join(homeDir, ".rediverio", "templates"),
+		CacheDir:        filepath.Join(homeDir, ".exploop", "templates"),
 		MaxCacheAge:     7 * 24 * time.Hour, // 7 days
 		MaxCacheSize:    100 * 1024 * 1024,  // 100MB
 		CleanupInterval: 1 * time.Hour,

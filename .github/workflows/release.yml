@@ -41,4 +41,4 @@ jobs:
       - name: Trigger Go Proxy update
         run: |
           # Trigger proxy.golang.org to fetch the new version
-          curl -s "https://proxy.golang.org/github.com/rediverio/sdk/@v/${{ github.ref_name }}.info" || true
+          curl -s "https://proxy.golang.org/github.com/exploopio/sdk/@v/${{ github.ref_name }}.info" || true

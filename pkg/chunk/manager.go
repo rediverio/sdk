@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rediverio/sdk/pkg/compress"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/compress"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // Uploader is the interface for uploading chunks.
@@ -90,13 +90,13 @@ func (m *Manager) SetVerbose(v bool) {
 }
 
 // NeedsChunking checks if a report needs to be chunked.
-func (m *Manager) NeedsChunking(report *ris.Report) bool {
+func (m *Manager) NeedsChunking(report *eis.Report) bool {
 	return m.splitter.NeedsChunking(report)
 }
 
 // SubmitReport queues a report for chunked upload.
 // Returns immediately after storing chunks to SQLite.
-func (m *Manager) SubmitReport(ctx context.Context, report *ris.Report) (*Report, error) {
+func (m *Manager) SubmitReport(ctx context.Context, report *eis.Report) (*Report, error) {
 	// Split report into chunks
 	chunkDataList, err := m.splitter.Split(report)
 	if err != nil {

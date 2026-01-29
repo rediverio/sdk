@@ -167,7 +167,7 @@ func (v *Validator) APIKey(field, value string) *Validator {
 	if value == "" {
 		return v
 	}
-	// Rediver API keys should start with rs_ prefix
+	// Exploop API keys should start with rs_ prefix
 	validPrefixes := []string{"rs_src_", "rs_usr_", "rs_int_"}
 	for _, prefix := range validPrefixes {
 		if strings.HasPrefix(value, prefix) {

@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 // BaseConnector provides a base implementation for connectors with common functionality

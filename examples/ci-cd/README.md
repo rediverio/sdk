@@ -1,6 +1,6 @@
 # CI/CD Integration Examples
 
-Ready-to-use examples for integrating Rediver Agent into your CI/CD pipelines.
+Ready-to-use examples for integrating Exploop Agent into your CI/CD pipelines.
 
 ## Supported Platforms
 
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker://rediverio/agent:ci
+      - uses: docker://exploopio/agent:ci
         with:
           args: -tools semgrep,gitleaks,trivy -target . -auto-ci
         env:
@@ -50,7 +50,7 @@ stages:
 
 security-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - agent -tools semgrep,gitleaks,trivy -target . -auto-ci
 ```
@@ -68,7 +68,7 @@ security-scan:
 | `-output file.json` | Output file path |
 | `-sarif` | Generate SARIF report |
 | `-sarif-output file.sarif` | SARIF output path |
-| `-push` | Push results to Rediver platform |
+| `-push` | Push results to Exploop platform |
 
 ## Available Scanners
 

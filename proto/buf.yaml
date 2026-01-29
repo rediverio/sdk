@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/rediverio/rediver
+name: buf.build/exploopio/exploop
 deps:
   - buf.build/googleapis/googleapis
 breaking:

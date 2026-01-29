@@ -1,4 +1,4 @@
-package ris
+package eis
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ReconConverterOptions configures the conversion from ReconResult to RIS Report.
+// ReconConverterOptions configures the conversion from ReconResult to EIS Report.
 type ReconConverterOptions struct {
 	// Source tracking
 	DiscoverySource string // "agent", "integration", "manual"
@@ -38,9 +38,9 @@ func DefaultReconConverterOptions() *ReconConverterOptions {
 	}
 }
 
-// ReconToRISInput holds the data from a reconnaissance scan result.
+// ReconToEISInput holds the data from a reconnaissance scan result.
 // This is a simplified version of core.ReconResult to avoid import cycles.
-type ReconToRISInput struct {
+type ReconToEISInput struct {
 	// Scanner info
 	ScannerName    string
 	ScannerVersion string
@@ -132,8 +132,8 @@ type TechnologyInput struct {
 	Website    string
 }
 
-// ConvertReconToRIS converts reconnaissance results to a RIS Report.
-func ConvertReconToRIS(input *ReconToRISInput, opts *ReconConverterOptions) (*Report, error) {
+// ConvertReconToEIS converts reconnaissance results to a EIS Report.
+func ConvertReconToEIS(input *ReconToEISInput, opts *ReconConverterOptions) (*Report, error) {
 	if opts == nil {
 		opts = DefaultReconConverterOptions()
 	}
@@ -141,7 +141,7 @@ func ConvertReconToRIS(input *ReconToRISInput, opts *ReconConverterOptions) (*Re
 	now := time.Now()
 	report := &Report{
 		Version: "1.0",
-		Schema:  "https://rediver.io/schemas/ris/1.0",
+		Schema:  "https://exploop.io/schemas/ris/1.0",
 		Metadata: ReportMetadata{
 			ID:         fmt.Sprintf("recon-%s-%d", input.ScannerName, now.UnixNano()),
 			Timestamp:  now,
@@ -614,7 +614,7 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// MergeReconReports merges multiple RIS reports from different recon scanners.
+// MergeReconReports merges multiple EIS reports from different recon scanners.
 // This is useful when running a recon pipeline (subfinder -> dnsx -> naabu -> httpx).
 func MergeReconReports(reports []*Report) *Report {
 	if len(reports) == 0 {
@@ -626,7 +626,7 @@ func MergeReconReports(reports []*Report) *Report {
 
 	merged := &Report{
 		Version: "1.0",
-		Schema:  "https://rediver.io/schemas/ris/1.0",
+		Schema:  "https://exploop.io/schemas/ris/1.0",
 		Metadata: ReportMetadata{
 			ID:         fmt.Sprintf("merged-recon-%d", time.Now().UnixNano()),
 			Timestamp:  time.Now(),

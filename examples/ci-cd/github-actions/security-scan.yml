@@ -1,5 +1,5 @@
 # =============================================================================
-# GitHub Actions: Security Scan with Rediver Agent
+# GitHub Actions: Security Scan with Exploop Agent
 # =============================================================================
 # Copy this file to your repository: .github/workflows/security-scan.yml
 #
@@ -23,13 +23,13 @@ on:
   workflow_dispatch:
     inputs:
       tools:
-        description: 'Scanners to run (comma-separated)'
+        description: "Scanners to run (comma-separated)"
         required: false
-        default: 'semgrep,gitleaks,trivy'
+        default: "semgrep,gitleaks,trivy"
       verbose:
-        description: 'Enable verbose output'
+        description: "Enable verbose output"
         required: false
-        default: 'true'
+        default: "true"
         type: boolean
 
 # Prevent duplicate runs
@@ -44,17 +44,17 @@ jobs:
 
     permissions:
       contents: read
-      security-events: write  # For SARIF upload
-      pull-requests: write    # For PR comments
+      security-events: write # For SARIF upload
+      pull-requests: write # For PR comments
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for diff-based scanning
+          fetch-depth: 0 # Full history for diff-based scanning
 
-      - name: Run Rediver Security Scan
-        uses: docker://rediverio/agent:ci
+      - name: Run Exploop Security Scan
+        uses: docker://exploopio/agent:ci
         with:
           args: >-
             -tools ${{ github.event.inputs.tools || 'semgrep,gitleaks,trivy' }}
@@ -129,7 +129,7 @@ jobs:
           fi
 
       - name: Scan container with Trivy
-        uses: docker://rediverio/agent:ci
+        uses: docker://exploopio/agent:ci
         with:
           args: >-
             -tool trivy-image

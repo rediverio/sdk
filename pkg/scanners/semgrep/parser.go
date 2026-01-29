@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Parser converts semgrep output to RIS format.
+// Parser converts semgrep output to EIS format.
 type Parser struct{}
 
 // Name returns the parser name.
@@ -29,21 +29,21 @@ func (p *Parser) CanParse(data []byte) bool {
 	return err == nil
 }
 
-// Parse converts semgrep JSON output to RIS report.
-func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// Parse converts semgrep JSON output to EIS report.
+func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	// Parse semgrep report
 	semgrepReport, err := ParseJSONBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse semgrep output: %w", err)
 	}
 
-	// Create RIS report
-	report := ris.NewReport()
+	// Create EIS report
+	report := eis.NewReport()
 	report.Metadata.SourceType = "scanner"
 	report.Metadata.Timestamp = time.Now()
 
 	// Set tool info
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:   "semgrep",
 		Vendor: "Semgrep Inc.",
 		Capabilities: []string{
@@ -72,13 +72,13 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 	return report, nil
 }
 
-// convertResult converts a semgrep result to RIS finding.
-func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris.Finding {
-	finding := ris.Finding{
+// convertResult converts a semgrep result to EIS finding.
+func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis.Finding {
+	finding := eis.Finding{
 		ID:                 fmt.Sprintf("finding-%d", index+1),
-		Type:               ris.FindingTypeVulnerability,
+		Type:               eis.FindingTypeVulnerability,
 		Title:              fmt.Sprintf("%s at %s:%d", SlugToNormalText(r.CheckID), r.Path, r.Start.Line),
-		Severity:           ris.Severity(r.GetSeverity()),
+		Severity:           eis.Severity(r.GetSeverity()),
 		Confidence:         r.GetConfidence(),
 		Impact:             r.GetImpact(),
 		Likelihood:         r.GetLikelihood(),
@@ -100,7 +100,7 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 	}
 
 	// Location
-	finding.Location = &ris.FindingLocation{
+	finding.Location = &eis.FindingLocation{
 		Path:        r.Path,
 		StartLine:   r.Start.Line,
 		EndLine:     r.End.Line,
@@ -123,7 +123,7 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 	cwes := r.GetCWEs()
 	owasps := r.GetOWASPs()
 	if len(cwes) > 0 || len(owasps) > 0 {
-		finding.Vulnerability = &ris.VulnerabilityDetails{
+		finding.Vulnerability = &eis.VulnerabilityDetails{
 			CWEIDs:   cwes,
 			OWASPIDs: owasps,
 		}
@@ -151,7 +151,7 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 
 	// Remediation
 	if r.Extra.Fix != "" {
-		finding.Remediation = &ris.Remediation{
+		finding.Remediation = &eis.Remediation{
 			Recommendation: "Apply the suggested fix",
 			FixAvailable:   true,
 			AutoFixable:    true,
@@ -173,13 +173,13 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) ris
 	return finding
 }
 
-// convertDataFlow converts semgrep dataflow trace to RIS DataFlow.
-func (p *Parser) convertDataFlow(df *DataFlow) *ris.DataFlow {
-	result := &ris.DataFlow{}
+// convertDataFlow converts semgrep dataflow trace to EIS DataFlow.
+func (p *Parser) convertDataFlow(df *DataFlow) *eis.DataFlow {
+	result := &eis.DataFlow{}
 
 	// Parse taint source
 	if source := ConvertCliLoc(df.TaintSource); source != nil {
-		result.Sources = append(result.Sources, ris.DataFlowLocation{
+		result.Sources = append(result.Sources, eis.DataFlowLocation{
 			Path:    source.Location.Path,
 			Line:    source.Location.Start.Line,
 			Column:  source.Location.Start.Col,
@@ -191,7 +191,7 @@ func (p *Parser) convertDataFlow(df *DataFlow) *ris.DataFlow {
 
 	// Parse intermediate vars
 	for i, node := range df.IntermediateVars {
-		result.Intermediates = append(result.Intermediates, ris.DataFlowLocation{
+		result.Intermediates = append(result.Intermediates, eis.DataFlowLocation{
 			Path:    node.Location.Path,
 			Line:    node.Location.Start.Line,
 			Column:  node.Location.Start.Col,
@@ -209,7 +209,7 @@ func (p *Parser) convertDataFlow(df *DataFlow) *ris.DataFlow {
 		}
 	}
 	for i, sink := range sinks {
-		result.Sinks = append(result.Sinks, ris.DataFlowLocation{
+		result.Sinks = append(result.Sinks, eis.DataFlowLocation{
 			Path:    sink.Location.Path,
 			Line:    sink.Location.Start.Line,
 			Column:  sink.Location.Start.Col,
@@ -224,7 +224,7 @@ func (p *Parser) convertDataFlow(df *DataFlow) *ris.DataFlow {
 
 // createAssetFromOptions creates an asset from parse options or branch info.
 // Priority: opts.AssetValue > opts.BranchInfo.RepositoryURL
-func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
+func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *eis.Asset {
 	if opts == nil {
 		return nil
 	}
@@ -238,15 +238,15 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 	if opts.AssetValue != "" {
 		assetType := opts.AssetType
 		if assetType == "" {
-			assetType = ris.AssetTypeRepository
+			assetType = eis.AssetTypeRepository
 		}
-		return &ris.Asset{
+		return &eis.Asset{
 			ID:          assetID,
 			Type:        assetType,
 			Value:       opts.AssetValue,
 			Name:        opts.AssetValue,
-			Criticality: ris.CriticalityHigh,
-			Properties: ris.Properties{
+			Criticality: eis.CriticalityHigh,
+			Properties: eis.Properties{
 				"source": "parse_options",
 			},
 		}
@@ -254,7 +254,7 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 
 	// Priority 2: BranchInfo.RepositoryURL
 	if opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
-		props := ris.Properties{
+		props := eis.Properties{
 			"source":       "branch_info",
 			"auto_created": true,
 		}
@@ -266,12 +266,12 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 		}
 		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
 
-		return &ris.Asset{
+		return &eis.Asset{
 			ID:          assetID,
-			Type:        ris.AssetTypeRepository,
+			Type:        eis.AssetTypeRepository,
 			Value:       opts.BranchInfo.RepositoryURL,
 			Name:        opts.BranchInfo.RepositoryURL,
-			Criticality: ris.CriticalityHigh,
+			Criticality: eis.CriticalityHigh,
 			Properties:  props,
 		}
 	}
@@ -279,8 +279,8 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 	return nil
 }
 
-// ParseToRIS is a convenience function to parse semgrep JSON to RIS.
-func ParseToRIS(data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// ParseToEIS is a convenience function to parse semgrep JSON to EIS.
+func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	parser := &Parser{}
 	return parser.Parse(context.Background(), data, opts)
 }

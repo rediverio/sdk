@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 const (

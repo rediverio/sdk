@@ -1,4 +1,4 @@
-// Package health provides health check endpoints for the Rediver SDK.
+// Package health provides health check endpoints for the Exploop SDK.
 // It supports Kubernetes-style readiness and liveness probes, and
 // allows registering custom health checks for dependencies.
 package health

@@ -1,4 +1,4 @@
-// Package github provides a GitHub provider for the Rediver SDK.
+// Package github provides a GitHub provider for the Exploop SDK.
 package github
 
 import (
@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/connectors/github"
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/connectors/github"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // Provider is a complete GitHub integration bundle.
@@ -181,20 +181,20 @@ func (c *RepoCollector) Collect(ctx context.Context, opts *core.CollectOptions) 
 		}
 	}
 
-	// Convert to RIS assets
-	report := ris.NewReport()
-	report.Tool = &ris.Tool{Name: c.Name(), Version: "1.0"}
+	// Convert to EIS assets
+	report := eis.NewReport()
+	report.Tool = &eis.Tool{Name: c.Name(), Version: "1.0"}
 	report.Metadata.SourceType = "collector"
 
 	for _, repo := range allRepos {
-		asset := ris.Asset{
+		asset := eis.Asset{
 			ID:          fmt.Sprintf("repo-%d", repo.ID),
-			Type:        ris.AssetTypeRepository,
+			Type:        eis.AssetTypeRepository,
 			Value:       repo.FullName,
 			Name:        repo.Name,
 			Description: repo.Description,
-			Technical: &ris.AssetTechnical{
-				Repository: &ris.RepositoryTechnical{
+			Technical: &eis.AssetTechnical{
+				Repository: &eis.RepositoryTechnical{
 					Platform:      "github",
 					Owner:         c.connector.Organization(),
 					Name:          repo.Name,
@@ -213,7 +213,7 @@ func (c *RepoCollector) Collect(ctx context.Context, opts *core.CollectOptions) 
 		SourceType:  c.Type(),
 		CollectedAt: time.Now().Unix(),
 		DurationMs:  time.Since(start).Milliseconds(),
-		Reports:     []*ris.Report{report},
+		Reports:     []*eis.Report{report},
 		TotalItems:  len(allRepos),
 	}, nil
 }
@@ -258,21 +258,21 @@ func (c *CodeScanningCollector) Collect(ctx context.Context, opts *core.CollectO
 		return nil, err
 	}
 
-	// Convert to RIS findings
-	report := ris.NewReport()
-	report.Tool = &ris.Tool{Name: c.Name(), Version: "1.0"}
+	// Convert to EIS findings
+	report := eis.NewReport()
+	report.Tool = &eis.Tool{Name: c.Name(), Version: "1.0"}
 	report.Metadata.SourceType = "collector"
 
 	for _, alert := range alerts {
-		finding := ris.Finding{
+		finding := eis.Finding{
 			ID:          fmt.Sprintf("github-cs-%d", alert.Number),
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       alert.Rule.Name,
 			Description: alert.Rule.Description,
 			Severity:    mapSeverity(alert.Rule.Severity),
 			RuleID:      alert.Rule.ID,
 			RuleName:    alert.Rule.Name,
-			Location: &ris.FindingLocation{
+			Location: &eis.FindingLocation{
 				Path:        alert.MostRecentInstance.Location.Path,
 				StartLine:   alert.MostRecentInstance.Location.StartLine,
 				EndLine:     alert.MostRecentInstance.Location.EndLine,
@@ -289,7 +289,7 @@ func (c *CodeScanningCollector) Collect(ctx context.Context, opts *core.CollectO
 		SourceType:  c.Type(),
 		CollectedAt: time.Now().Unix(),
 		DurationMs:  time.Since(start).Milliseconds(),
-		Reports:     []*ris.Report{report},
+		Reports:     []*eis.Report{report},
 		TotalItems:  len(alerts),
 	}, nil
 }
@@ -332,25 +332,25 @@ func (c *DependabotCollector) Collect(ctx context.Context, opts *core.CollectOpt
 		return nil, err
 	}
 
-	// Convert to RIS findings
-	report := ris.NewReport()
-	report.Tool = &ris.Tool{Name: c.Name(), Version: "1.0"}
+	// Convert to EIS findings
+	report := eis.NewReport()
+	report.Tool = &eis.Tool{Name: c.Name(), Version: "1.0"}
 	report.Metadata.SourceType = "collector"
 
 	for _, alert := range alerts {
-		finding := ris.Finding{
+		finding := eis.Finding{
 			ID:          fmt.Sprintf("github-dep-%d", alert.Number),
-			Type:        ris.FindingTypeVulnerability,
+			Type:        eis.FindingTypeVulnerability,
 			Title:       alert.SecurityAdvisory.Summary,
 			Description: alert.SecurityAdvisory.Description,
 			Severity:    mapSeverity(alert.SecurityAdvisory.Severity),
-			Vulnerability: &ris.VulnerabilityDetails{
+			Vulnerability: &eis.VulnerabilityDetails{
 				CVEID:                alert.SecurityAdvisory.CVEID,
 				Package:              alert.Dependency.Package.Name,
 				AffectedVersionRange: alert.SecurityVulnerability.VulnerableVersionRange,
 				Ecosystem:            alert.Dependency.Package.Ecosystem,
 			},
-			Location: &ris.FindingLocation{
+			Location: &eis.FindingLocation{
 				Path: alert.Dependency.ManifestPath,
 			},
 			References: []string{alert.HTMLURL, alert.SecurityAdvisory.GHSAID},
@@ -368,7 +368,7 @@ func (c *DependabotCollector) Collect(ctx context.Context, opts *core.CollectOpt
 		SourceType:  c.Type(),
 		CollectedAt: time.Now().Unix(),
 		DurationMs:  time.Since(start).Milliseconds(),
-		Reports:     []*ris.Report{report},
+		Reports:     []*eis.Report{report},
 		TotalItems:  len(alerts),
 	}, nil
 }
@@ -405,17 +405,17 @@ func splitString(s, sep string) []string {
 	return result
 }
 
-func mapSeverity(severity string) ris.Severity {
+func mapSeverity(severity string) eis.Severity {
 	switch severity {
 	case "critical":
-		return ris.SeverityCritical
+		return eis.SeverityCritical
 	case "high":
-		return ris.SeverityHigh
+		return eis.SeverityHigh
 	case "medium":
-		return ris.SeverityMedium
+		return eis.SeverityMedium
 	case "low":
-		return ris.SeverityLow
+		return eis.SeverityLow
 	default:
-		return ris.SeverityInfo
+		return eis.SeverityInfo
 	}
 }

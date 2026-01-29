@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // Result represents an upload result.
@@ -27,7 +27,7 @@ type Result struct {
 
 // Uploader is the interface for uploading reports.
 type Uploader interface {
-	Upload(ctx context.Context, report *ris.Report) (*Result, error)
+	Upload(ctx context.Context, report *eis.Report) (*Result, error)
 }
 
 // PipelineConfig configures the upload pipeline.
@@ -79,7 +79,7 @@ func DefaultPipelineConfig() *PipelineConfig {
 // QueueItem represents a pending upload.
 type QueueItem struct {
 	ID          string      `json:"id"`
-	Report      *ris.Report `json:"-"` // Not serialized
+	Report      *eis.Report `json:"-"` // Not serialized
 	ReportJSON  []byte      `json:"report_json,omitempty"`
 	JobID       string      `json:"job_id,omitempty"`
 	TenantID    string      `json:"tenant_id,omitempty"`
@@ -197,7 +197,7 @@ func (p *Pipeline) Stop(ctx context.Context) error {
 
 // Submit queues a report for async upload.
 // Returns immediately after queueing.
-func (p *Pipeline) Submit(report *ris.Report, opts ...SubmitOption) (string, error) {
+func (p *Pipeline) Submit(report *eis.Report, opts ...SubmitOption) (string, error) {
 	p.mu.RLock()
 	running := p.running
 	p.mu.RUnlock()

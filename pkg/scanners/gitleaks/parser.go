@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Parser converts gitleaks output to RIS format.
+// Parser converts gitleaks output to EIS format.
 type Parser struct{}
 
 // Name returns the parser name.
@@ -29,21 +29,21 @@ func (p *Parser) CanParse(data []byte) bool {
 	return err == nil
 }
 
-// Parse converts gitleaks JSON output to RIS report.
-func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// Parse converts gitleaks JSON output to EIS report.
+func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	// Parse gitleaks findings
 	findings, err := ParseJSONBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse gitleaks output: %w", err)
 	}
 
-	// Create RIS report
-	report := ris.NewReport()
+	// Create EIS report
+	report := eis.NewReport()
 	report.Metadata.SourceType = "scanner"
 	report.Metadata.Timestamp = time.Now()
 
 	// Set tool info
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:   "gitleaks",
 		Vendor: "Gitleaks",
 		Capabilities: []string{
@@ -69,13 +69,13 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 	return report, nil
 }
 
-// convertFinding converts a gitleaks finding to RIS finding.
-func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) ris.Finding {
-	finding := ris.Finding{
+// convertFinding converts a gitleaks finding to EIS finding.
+func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) eis.Finding {
+	finding := eis.Finding{
 		ID:         fmt.Sprintf("finding-%d", index+1),
-		Type:       ris.FindingTypeSecret,
+		Type:       eis.FindingTypeSecret,
 		Title:      fmt.Sprintf("%s detected in %s:%d", f.Description, f.File, f.StartLine),
-		Severity:   ris.SeverityHigh, // Secrets are always high severity
+		Severity:   eis.SeverityHigh, // Secrets are always high severity
 		Confidence: 90,
 		Category:   "Hardcoded Secret",
 		RuleID:     f.RuleID,
@@ -92,7 +92,7 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) r
 	}
 
 	// Set location
-	finding.Location = &ris.FindingLocation{
+	finding.Location = &eis.FindingLocation{
 		Path:        f.File,
 		StartLine:   f.StartLine,
 		EndLine:     f.EndLine,
@@ -117,7 +117,7 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) r
 	}
 
 	// Set secret details
-	finding.Secret = &ris.SecretDetails{
+	finding.Secret = &eis.SecretDetails{
 		SecretType:  GetSecretType(f.RuleID),
 		Service:     GetServiceName(f.RuleID),
 		MaskedValue: core.MaskSecret(f.Secret),
@@ -143,7 +143,7 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) r
 	}
 
 	// Add remediation guidance
-	finding.Remediation = &ris.Remediation{
+	finding.Remediation = &eis.Remediation{
 		Recommendation: fmt.Sprintf("Remove the %s from the codebase and rotate/revoke it immediately.", GetSecretType(f.RuleID)),
 		Steps: []string{
 			"1. Revoke the exposed secret immediately",
@@ -174,7 +174,7 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) r
 
 // createAssetFromOptions creates an asset from parse options or branch info.
 // Priority: opts.AssetValue > opts.BranchInfo.RepositoryURL
-func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
+func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *eis.Asset {
 	if opts == nil {
 		return nil
 	}
@@ -188,15 +188,15 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 	if opts.AssetValue != "" {
 		assetType := opts.AssetType
 		if assetType == "" {
-			assetType = ris.AssetTypeRepository
+			assetType = eis.AssetTypeRepository
 		}
-		return &ris.Asset{
+		return &eis.Asset{
 			ID:          assetID,
 			Type:        assetType,
 			Value:       opts.AssetValue,
 			Name:        opts.AssetValue,
-			Criticality: ris.CriticalityHigh,
-			Properties: ris.Properties{
+			Criticality: eis.CriticalityHigh,
+			Properties: eis.Properties{
 				"source": "parse_options",
 			},
 		}
@@ -204,7 +204,7 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 
 	// Priority 2: BranchInfo.RepositoryURL
 	if opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
-		props := ris.Properties{
+		props := eis.Properties{
 			"source":       "branch_info",
 			"auto_created": true,
 		}
@@ -216,12 +216,12 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 		}
 		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
 
-		return &ris.Asset{
+		return &eis.Asset{
 			ID:          assetID,
-			Type:        ris.AssetTypeRepository,
+			Type:        eis.AssetTypeRepository,
 			Value:       opts.BranchInfo.RepositoryURL,
 			Name:        opts.BranchInfo.RepositoryURL,
-			Criticality: ris.CriticalityHigh,
+			Criticality: eis.CriticalityHigh,
 			Properties:  props,
 		}
 	}
@@ -229,8 +229,8 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *ris.Asset {
 	return nil
 }
 
-// ParseToRIS is a convenience function to parse gitleaks JSON to RIS.
-func ParseToRIS(data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// ParseToEIS is a convenience function to parse gitleaks JSON to EIS.
+func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	parser := &Parser{}
 	return parser.Parse(context.Background(), data, opts)
 }

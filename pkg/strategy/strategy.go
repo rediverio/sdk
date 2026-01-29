@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/rediverio/sdk/pkg/gitenv"
+	"github.com/exploopio/sdk/pkg/gitenv"
 )
 
 // ScanStrategy represents how files should be scanned.

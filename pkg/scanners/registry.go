@@ -7,17 +7,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/scanners/codeql"
-	"github.com/rediverio/sdk/pkg/scanners/gitleaks"
-	"github.com/rediverio/sdk/pkg/scanners/nuclei"
-	"github.com/rediverio/sdk/pkg/scanners/recon/dnsx"
-	"github.com/rediverio/sdk/pkg/scanners/recon/httpx"
-	"github.com/rediverio/sdk/pkg/scanners/recon/katana"
-	"github.com/rediverio/sdk/pkg/scanners/recon/naabu"
-	"github.com/rediverio/sdk/pkg/scanners/recon/subfinder"
-	"github.com/rediverio/sdk/pkg/scanners/semgrep"
-	"github.com/rediverio/sdk/pkg/scanners/trivy"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/scanners/codeql"
+	"github.com/exploopio/sdk/pkg/scanners/gitleaks"
+	"github.com/exploopio/sdk/pkg/scanners/nuclei"
+	"github.com/exploopio/sdk/pkg/scanners/recon/dnsx"
+	"github.com/exploopio/sdk/pkg/scanners/recon/httpx"
+	"github.com/exploopio/sdk/pkg/scanners/recon/katana"
+	"github.com/exploopio/sdk/pkg/scanners/recon/naabu"
+	"github.com/exploopio/sdk/pkg/scanners/recon/subfinder"
+	"github.com/exploopio/sdk/pkg/scanners/semgrep"
+	"github.com/exploopio/sdk/pkg/scanners/trivy"
 )
 
 // =============================================================================

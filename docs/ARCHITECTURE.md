@@ -1,14 +1,14 @@
-# Rediver Architecture Guide
+# Exploop Architecture Guide
 
-This document explains the core architecture of the Rediver platform and how the SDK components interact with the backend.
+This document explains the core architecture of the Exploop platform and how the SDK components interact with the backend.
 
 ## Overview
 
-Rediver is a security platform that collects, analyzes, and manages security findings from various sources. The architecture follows an **Agent-Component** model.
+Exploop is a security platform that collects, analyzes, and manages security findings from various sources. The architecture follows an **Agent-Component** model.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            REDIVER PLATFORM                                 │
+│                            EXPLOOP PLATFORM                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
@@ -49,12 +49,12 @@ Rediver is a security platform that collects, analyzes, and manages security fin
 
 ### 1. Agent
 
-An **Agent** is the identity registered on the server. Every component that pushes data to Rediver does so through an Agent.
+An **Agent** is the identity registered on the server. Every component that pushes data to Exploop does so through an Agent.
 
 ```go
 // Agent is identified by agent_id
 client := client.New(&client.Config{
-    BaseURL:  "https://api.rediver.io",
+    BaseURL:  "https://api.exploop.io",
     APIKey:   "your-api-key",
     AgentID: "agent-123",  // ← This is the Agent identity
 })
@@ -140,11 +140,11 @@ Components are the building blocks that perform actual work:
                                                   │
                                                   ▼
                                           ┌──────────────┐
-                                          │  Rediver API │
+                                          │  Exploop API │
                                           └──────────────┘
 ```
 
-## RIS (Rediver Ingest Schema)
+## RIS (Exploop Ingest Schema)
 
 All components produce **RIS Reports** - a standardized format for security findings and assets:
 
@@ -175,7 +175,7 @@ The SDK supports two transport layers:
 ### HTTP/REST (Default)
 ```go
 client := client.New(&client.Config{
-    BaseURL: "https://api.rediver.io",
+    BaseURL: "https://api.exploop.io",
     APIKey:  "xxx",
 })
 ```
@@ -183,7 +183,7 @@ client := client.New(&client.Config{
 ### gRPC (High Performance)
 ```go
 grpcTransport := grpc.NewTransport(&grpc.Config{
-    Address: "grpc.rediver.io:9090",
+    Address: "grpc.exploop.io:9090",
     APIKey:  "xxx",
     UseTLS:  true,
 })

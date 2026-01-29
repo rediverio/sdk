@@ -4,7 +4,7 @@
 // by embedding the BaseScanner and customizing the behavior.
 //
 // Build: go build -o custom-scanner ./examples/custom-scanner
-// Run:   ./custom-scanner -target /path/to/project -api-url https://api.rediver.io -api-key YOUR_KEY
+// Run:   ./custom-scanner -target /path/to/project -api-url https://api.exploop.io -api-key YOUR_KEY
 package main
 
 import (
@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/client"
-	"github.com/rediverio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/client"
+	"github.com/exploopio/sdk/pkg/core"
 )
 
 // =============================================================================
@@ -136,8 +136,8 @@ func (p *MyCustomParser) CanParse(data []byte) bool {
 func main() {
 	// CLI flags
 	target := flag.String("target", ".", "Target directory to scan")
-	apiURL := flag.String("api-url", "", "Rediver API URL")
-	apiKey := flag.String("api-key", "", "Rediver API key")
+	apiURL := flag.String("api-url", "", "Exploop API URL")
+	apiKey := flag.String("api-key", "", "Exploop API key")
 	ruleset := flag.String("ruleset", "auto", "Semgrep ruleset to use")
 	verbose := flag.Bool("verbose", false, "Verbose output")
 	daemon := flag.Bool("daemon", false, "Run in daemon mode")
@@ -219,9 +219,9 @@ func runOnce(ctx context.Context, scanner *MyCustomScanner, pusher core.Pusher, 
 		} else {
 			fmt.Printf("Found %d findings\n", len(report.Findings))
 
-			// Push to Rediver if configured
+			// Push to Exploop if configured
 			if pusher != nil && len(report.Findings) > 0 {
-				fmt.Println("\nPushing to Rediver...")
+				fmt.Println("\nPushing to Exploop...")
 				pushResult, err := pusher.PushFindings(ctx, report)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Push failed: %v\n", err)

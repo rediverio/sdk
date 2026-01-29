@@ -53,7 +53,7 @@ type Config struct {
 	RetryBackoffMs int // Initial backoff between retries (default: 1000)
 
 	// Storage configuration
-	DatabasePath   string // SQLite database path (default: ~/.rediver/chunks.db)
+	DatabasePath   string // SQLite database path (default: ~/.exploop/chunks.db)
 	RetentionHours int    // How long to keep completed chunks (default: 24)
 	MaxStorageMB   int    // Max storage for chunk DB (default: 500)
 
@@ -111,7 +111,7 @@ func defaultDatabasePath() string {
 	if err != nil {
 		home = "/tmp"
 	}
-	return filepath.Join(home, ".rediver", "chunks.db")
+	return filepath.Join(home, ".exploop", "chunks.db")
 }
 
 // Validate validates the configuration.

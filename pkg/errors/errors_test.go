@@ -1,4 +1,4 @@
-// Package errors provides custom error types for the Rediver SDK.
+// Package errors provides custom error types for the Exploop SDK.
 package errors
 
 import (

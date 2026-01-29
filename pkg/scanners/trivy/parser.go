@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/core"
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/core"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
-// Parser converts Trivy JSON output to RIS format.
+// Parser converts Trivy JSON output to EIS format.
 type Parser struct {
 	// Configuration
 	Verbose bool
@@ -45,25 +45,25 @@ func (p *Parser) CanParse(data []byte) bool {
 	return report.SchemaVersion > 0 || report.ArtifactType != "" || len(report.Results) > 0
 }
 
-// Parse converts Trivy JSON output to RIS report.
-func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*ris.Report, error) {
+// Parse converts Trivy JSON output to EIS report.
+func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	var trivyReport Report
 	if err := json.Unmarshal(data, &trivyReport); err != nil {
 		return nil, fmt.Errorf("failed to parse trivy output: %w", err)
 	}
 
-	// Create RIS report
-	report := ris.NewReport()
+	// Create EIS report
+	report := eis.NewReport()
 
 	// Set metadata
-	report.Metadata = ris.ReportMetadata{
+	report.Metadata = eis.ReportMetadata{
 		ID:         fmt.Sprintf("trivy-%d", time.Now().Unix()),
 		Timestamp:  time.Now(),
 		SourceType: "scanner",
 	}
 
 	// Set tool info
-	report.Tool = &ris.Tool{
+	report.Tool = &eis.Tool{
 		Name:         "trivy",
 		Vendor:       "Aqua Security",
 		Capabilities: p.inferCapabilities(&trivyReport),
@@ -110,7 +110,7 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 
 // createAssetFromContext creates an asset from options, branch info, or Trivy artifact.
 // Priority: opts.AssetValue > opts.BranchInfo.RepositoryURL > ArtifactName
-func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions) *ris.Asset {
+func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions) *eis.Asset {
 	assetID := "asset-1"
 	if opts != nil && opts.AssetID != "" {
 		assetID = opts.AssetID
@@ -120,15 +120,15 @@ func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions)
 	if opts != nil && opts.AssetValue != "" {
 		assetType := opts.AssetType
 		if assetType == "" {
-			assetType = ris.AssetTypeRepository
+			assetType = eis.AssetTypeRepository
 		}
-		asset := &ris.Asset{
+		asset := &eis.Asset{
 			ID:          assetID,
 			Type:        assetType,
 			Value:       opts.AssetValue,
 			Name:        opts.AssetValue,
-			Criticality: ris.CriticalityHigh,
-			Properties: ris.Properties{
+			Criticality: eis.CriticalityHigh,
+			Properties: eis.Properties{
 				"source": "parse_options",
 			},
 		}
@@ -141,7 +141,7 @@ func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions)
 
 	// Priority 2: BranchInfo.RepositoryURL
 	if opts != nil && opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
-		props := ris.Properties{
+		props := eis.Properties{
 			"source":       "branch_info",
 			"auto_created": true,
 		}
@@ -153,12 +153,12 @@ func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions)
 		}
 		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
 
-		asset := &ris.Asset{
+		asset := &eis.Asset{
 			ID:          assetID,
-			Type:        ris.AssetTypeRepository,
+			Type:        eis.AssetTypeRepository,
 			Value:       opts.BranchInfo.RepositoryURL,
 			Name:        opts.BranchInfo.RepositoryURL,
-			Criticality: ris.CriticalityHigh,
+			Criticality: eis.CriticalityHigh,
 			Properties:  props,
 		}
 		// Add OS metadata if available
@@ -176,20 +176,20 @@ func (p *Parser) createAssetFromContext(report *Report, opts *core.ParseOptions)
 	return nil
 }
 
-// parseArtifactAsAsset converts Trivy artifact to RIS asset.
-func (p *Parser) parseArtifactAsAsset(report *Report, opts *core.ParseOptions) *ris.Asset {
+// parseArtifactAsAsset converts Trivy artifact to EIS asset.
+func (p *Parser) parseArtifactAsAsset(report *Report, opts *core.ParseOptions) *eis.Asset {
 	if report.ArtifactName == "" {
 		return nil
 	}
 
-	assetType := ris.AssetTypeRepository
+	assetType := eis.AssetTypeRepository
 	switch report.ArtifactType {
 	case "container_image":
-		assetType = ris.AssetTypeContainer
+		assetType = eis.AssetTypeContainer
 	case "filesystem":
-		assetType = ris.AssetTypeRepository
+		assetType = eis.AssetTypeRepository
 	case "repository":
-		assetType = ris.AssetTypeRepository
+		assetType = eis.AssetTypeRepository
 	}
 
 	// Override with options if provided
@@ -197,7 +197,7 @@ func (p *Parser) parseArtifactAsAsset(report *Report, opts *core.ParseOptions) *
 		assetType = opts.AssetType
 	}
 
-	asset := &ris.Asset{
+	asset := &eis.Asset{
 		ID:    fmt.Sprintf("asset-%x", sha256.Sum256([]byte(report.ArtifactName)))[:16],
 		Type:  assetType,
 		Value: report.ArtifactName,
@@ -212,20 +212,20 @@ func (p *Parser) parseArtifactAsAsset(report *Report, opts *core.ParseOptions) *
 	return asset
 }
 
-// parseVulnerability converts Trivy vulnerability to RIS finding.
-func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *core.ParseOptions) ris.Finding {
+// parseVulnerability converts Trivy vulnerability to EIS finding.
+func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *core.ParseOptions) eis.Finding {
 	// Get CVSS info
 	cvssScore, cvssVector, cvssSource := GetBestCVSSScore(vuln.CVSS)
 
 	// Generate fingerprint
 	fingerprint := p.generateFingerprint(vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion, result.Target)
 
-	finding := ris.Finding{
+	finding := eis.Finding{
 		ID:          vuln.VulnerabilityID,
-		Type:        ris.FindingTypeVulnerability,
+		Type:        eis.FindingTypeVulnerability,
 		Title:       p.buildVulnTitle(vuln),
 		Description: vuln.Description,
-		Severity:    ris.Severity(GetRISSeverity(vuln.Severity)),
+		Severity:    eis.Severity(GetRISSeverity(vuln.Severity)),
 		Confidence:  100, // Trivy is deterministic
 		RuleID:      vuln.VulnerabilityID,
 		RuleName:    vuln.Title,
@@ -235,17 +235,17 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 
 	// Set location
 	if vuln.PkgPath != "" {
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path: vuln.PkgPath,
 		}
 	} else if result.Target != "" {
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path: result.Target,
 		}
 	}
 
 	// Set vulnerability details
-	finding.Vulnerability = &ris.VulnerabilityDetails{
+	finding.Vulnerability = &eis.VulnerabilityDetails{
 		CVEID:           vuln.VulnerabilityID,
 		CWEIDs:          vuln.CweIDs,
 		CVSSVersion:     p.getCVSSVersion(cvssVector),
@@ -267,7 +267,7 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 
 	// Set remediation
 	if vuln.FixedVersion != "" {
-		finding.Remediation = &ris.Remediation{
+		finding.Remediation = &eis.Remediation{
 			Recommendation: fmt.Sprintf("Upgrade %s from %s to %s", vuln.PkgName, vuln.InstalledVersion, vuln.FixedVersion),
 			FixAvailable:   true,
 		}
@@ -287,21 +287,21 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 	return finding
 }
 
-// parseMisconfiguration converts Trivy misconfiguration to RIS finding.
-func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfiguration, opts *core.ParseOptions) ris.Finding {
+// parseMisconfiguration converts Trivy misconfiguration to EIS finding.
+func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfiguration, opts *core.ParseOptions) eis.Finding {
 	// Skip PASS status
 	if misconfig.Status == "PASS" {
-		return ris.Finding{}
+		return eis.Finding{}
 	}
 
 	fingerprint := p.generateFingerprint(misconfig.ID, result.Target, misconfig.Type, misconfig.Message)
 
-	finding := ris.Finding{
+	finding := eis.Finding{
 		ID:          misconfig.ID,
-		Type:        ris.FindingTypeMisconfiguration,
+		Type:        eis.FindingTypeMisconfiguration,
 		Title:       misconfig.Title,
 		Description: misconfig.Description,
-		Severity:    ris.Severity(GetRISSeverity(misconfig.Severity)),
+		Severity:    eis.Severity(GetRISSeverity(misconfig.Severity)),
 		Confidence:  100,
 		RuleID:      misconfig.ID,
 		RuleName:    misconfig.Title,
@@ -311,7 +311,7 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 
 	// Set location
 	if misconfig.CauseMetadata.StartLine > 0 {
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path:      result.Target,
 			StartLine: misconfig.CauseMetadata.StartLine,
 			EndLine:   misconfig.CauseMetadata.EndLine,
@@ -329,13 +329,13 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 			finding.Location.Snippet = strings.TrimSuffix(snippet.String(), "\n")
 		}
 	} else {
-		finding.Location = &ris.FindingLocation{
+		finding.Location = &eis.FindingLocation{
 			Path: result.Target,
 		}
 	}
 
 	// Set misconfiguration details
-	finding.Misconfiguration = &ris.MisconfigurationDetails{
+	finding.Misconfiguration = &eis.MisconfigurationDetails{
 		PolicyID:     misconfig.ID,
 		PolicyName:   misconfig.Title,
 		ResourceType: misconfig.Type,
@@ -351,7 +351,7 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 
 	// Set remediation
 	if misconfig.Resolution != "" {
-		finding.Remediation = &ris.Remediation{
+		finding.Remediation = &eis.Remediation{
 			Recommendation: misconfig.Resolution,
 		}
 	}
@@ -380,16 +380,16 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 	return finding
 }
 
-// parseSecret converts Trivy secret to RIS finding.
-func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOptions) ris.Finding {
+// parseSecret converts Trivy secret to EIS finding.
+func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOptions) eis.Finding {
 	fingerprint := p.generateFingerprint(secret.RuleID, result.Target, fmt.Sprintf("%d", secret.StartLine), secret.Match)
 
-	finding := ris.Finding{
+	finding := eis.Finding{
 		ID:          fmt.Sprintf("%s-%d", secret.RuleID, secret.StartLine),
-		Type:        ris.FindingTypeSecret,
+		Type:        eis.FindingTypeSecret,
 		Title:       secret.Title,
 		Description: fmt.Sprintf("Secret detected: %s", secret.Category),
-		Severity:    ris.Severity(GetRISSeverity(secret.Severity)),
+		Severity:    eis.Severity(GetRISSeverity(secret.Severity)),
 		Confidence:  100,
 		RuleID:      secret.RuleID,
 		RuleName:    secret.Title,
@@ -398,7 +398,7 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 	}
 
 	// Set location
-	finding.Location = &ris.FindingLocation{
+	finding.Location = &eis.FindingLocation{
 		Path:      result.Target,
 		StartLine: secret.StartLine,
 		EndLine:   secret.EndLine,
@@ -415,7 +415,7 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 	}
 
 	// Set secret details
-	finding.Secret = &ris.SecretDetails{
+	finding.Secret = &eis.SecretDetails{
 		SecretType:  secret.Category,
 		MaskedValue: maskSecret(secret.Match),
 		Length:      len(secret.Match),
@@ -432,11 +432,11 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 	return finding
 }
 
-// parsePackage converts Trivy package to RIS dependency.
-func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOptions) ris.Dependency {
+// parsePackage converts Trivy package to EIS dependency.
+func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOptions) eis.Dependency {
 	id := p.generateFingerprint("pkg", result.Target, pkg.Name, pkg.Version)
 
-	dep := ris.Dependency{
+	dep := eis.Dependency{
 		ID:           id,
 		Name:         pkg.Name,
 		Version:      pkg.Version,
@@ -460,7 +460,7 @@ func (p *Parser) parsePackage(result *Result, pkg *Package, opts *core.ParseOpti
 	}
 
 	// Set location
-	dep.Location = &ris.FindingLocation{
+	dep.Location = &eis.FindingLocation{
 		Path: result.Target,
 	}
 	if pkg.FilePath != "" {

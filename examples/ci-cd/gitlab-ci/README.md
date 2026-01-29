@@ -1,6 +1,6 @@
 # GitLab CI Examples
 
-Examples for integrating Rediver Agent into GitLab CI/CD pipelines.
+Examples for integrating Exploop Agent into GitLab CI/CD pipelines.
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ When running in a MR context, findings are posted as inline comments on changed 
 
 ```yaml
 mr-security-review:
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   variables:
     GITLAB_TOKEN: $CI_JOB_TOKEN
   script:
@@ -90,7 +90,7 @@ script:
 ```yaml
 sast:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - agent -tool semgrep -target . -verbose -sarif -sarif-output gl-sast-report.json
   artifacts:
@@ -103,7 +103,7 @@ sast:
 ```yaml
 secret-detection:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - |
       agent -tool gitleaks -target . -verbose -json -output secrets.json
@@ -118,7 +118,7 @@ secret-detection:
 ```yaml
 dependency-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - agent -tool trivy -target . -verbose -json -output dependencies.json
   artifacts:
@@ -131,7 +131,7 @@ dependency-scan:
 ```yaml
 container-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   services:
     - docker:dind
   variables:
@@ -146,7 +146,7 @@ container-scan:
 ```yaml
 iac-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   script:
     - agent -tool trivy-config -target . -verbose
   rules:

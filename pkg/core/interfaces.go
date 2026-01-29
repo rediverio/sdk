@@ -1,4 +1,4 @@
-// Package core provides the core interfaces and base implementations for the Rediver Scanner SDK.
+// Package core provides the core interfaces and base implementations for the Exploop Scanner SDK.
 // Tenants can implement these interfaces to create custom scanners, collectors, and agents.
 package core
 
@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rediverio/sdk/pkg/ris"
+	"github.com/exploopio/sdk/pkg/eis"
 )
 
 // =============================================================================
@@ -266,10 +266,10 @@ type SecretFinding struct {
 }
 
 // =============================================================================
-// Parser Interface - For converting tool output to RIS
+// Parser Interface - For converting tool output to EIS
 // =============================================================================
 
-// Parser converts scanner output to RIS format.
+// Parser converts scanner output to EIS format.
 // Implement this interface to support custom output formats.
 type Parser interface {
 	// Name returns the parser name (e.g., "sarif", "json", "custom-trivy")
@@ -278,8 +278,8 @@ type Parser interface {
 	// SupportedFormats returns the output formats this parser can handle
 	SupportedFormats() []string
 
-	// Parse converts raw output to RIS report
-	Parse(ctx context.Context, data []byte, opts *ParseOptions) (*ris.Report, error)
+	// Parse converts raw output to EIS report
+	Parse(ctx context.Context, data []byte, opts *ParseOptions) (*eis.Report, error)
 
 	// CanParse checks if the parser can handle the given data
 	CanParse(data []byte) bool
@@ -292,7 +292,7 @@ type ParseOptions struct {
 	ToolType string `json:"tool_type"` // sast, sca, secret, iac, web3
 
 	// Asset information
-	AssetType  ris.AssetType `json:"asset_type"`
+	AssetType  eis.AssetType `json:"asset_type"`
 	AssetValue string        `json:"asset_value"`
 	AssetID    string        `json:"asset_id"`
 
@@ -302,7 +302,7 @@ type ParseOptions struct {
 
 	// Branch information for branch-aware finding lifecycle
 	// Provides full CI/CD context for auto-resolve and expiry features
-	BranchInfo *ris.BranchInfo `json:"branch_info,omitempty"`
+	BranchInfo *eis.BranchInfo `json:"branch_info,omitempty"`
 
 	// Defaults
 	DefaultConfidence int `json:"default_confidence"`
@@ -357,7 +357,7 @@ type CollectResult struct {
 	DurationMs  int64 `json:"duration_ms"`
 
 	// Results
-	Reports    []*ris.Report `json:"reports"`
+	Reports    []*eis.Report `json:"reports"`
 	TotalItems int           `json:"total_items"`
 	ErrorItems int           `json:"error_items"`
 
@@ -431,18 +431,18 @@ type AgentStatus struct {
 }
 
 // =============================================================================
-// Pusher Interface - For sending data to Rediver
+// Pusher Interface - For sending data to Exploop
 // =============================================================================
 
-// Pusher sends data to the Rediver API.
+// Pusher sends data to the Exploop API.
 type Pusher interface {
-	// PushFindings sends findings to Rediver
-	PushFindings(ctx context.Context, report *ris.Report) (*PushResult, error)
+	// PushFindings sends findings to Exploop
+	PushFindings(ctx context.Context, report *eis.Report) (*PushResult, error)
 
-	// PushAssets sends assets to Rediver
-	PushAssets(ctx context.Context, report *ris.Report) (*PushResult, error)
+	// PushAssets sends assets to Exploop
+	PushAssets(ctx context.Context, report *eis.Report) (*PushResult, error)
 
-	// SendHeartbeat sends a heartbeat to Rediver
+	// SendHeartbeat sends a heartbeat to Exploop
 	SendHeartbeat(ctx context.Context, status *AgentStatus) error
 
 	// TestConnection tests the API connection
@@ -499,7 +499,7 @@ type ProcessResult struct {
 	ScanResult *ScanResult `json:"scan_result"`
 
 	// Parsed report
-	Report *ris.Report `json:"report,omitempty"`
+	Report *eis.Report `json:"report,omitempty"`
 
 	// Push result
 	PushResult *PushResult `json:"push_result,omitempty"`
@@ -623,7 +623,7 @@ type ProviderConfig struct {
 // Adapter Interface - Format translation
 // =============================================================================
 
-// Adapter translates between different data formats and RIS.
+// Adapter translates between different data formats and EIS.
 type Adapter interface {
 	// Name returns the adapter name (e.g., "sarif", "cyclonedx")
 	Name() string
@@ -637,8 +637,8 @@ type Adapter interface {
 	// CanConvert checks if the input can be converted
 	CanConvert(input []byte) bool
 
-	// Convert transforms input to RIS Report
-	Convert(ctx context.Context, input []byte, opts *AdapterOptions) (*ris.Report, error)
+	// Convert transforms input to EIS Report
+	Convert(ctx context.Context, input []byte, opts *AdapterOptions) (*eis.Report, error)
 }
 
 // AdapterOptions configures adapter behavior.
@@ -669,10 +669,10 @@ type Enricher interface {
 	Name() string
 
 	// Enrich adds threat intel to a single finding
-	Enrich(ctx context.Context, finding *ris.Finding) (*ris.Finding, error)
+	Enrich(ctx context.Context, finding *eis.Finding) (*eis.Finding, error)
 
 	// EnrichBatch adds threat intel to multiple findings
-	EnrichBatch(ctx context.Context, findings []ris.Finding) ([]ris.Finding, error)
+	EnrichBatch(ctx context.Context, findings []eis.Finding) ([]eis.Finding, error)
 }
 
 // EnricherConfig holds enricher configuration.

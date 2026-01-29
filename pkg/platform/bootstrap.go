@@ -286,9 +286,9 @@ func (s *FileCredentialStore) Exists() bool {
 // This is the recommended way to initialize a platform agent:
 //
 //	creds, err := platform.EnsureRegistered(ctx, &platform.EnsureRegisteredConfig{
-//	    BaseURL: "https://api.rediver.io",
+//	    BaseURL: "https://api.exploop.io",
 //	    BootstrapToken: os.Getenv("BOOTSTRAP_TOKEN"),
-//	    CredentialsFile: "/etc/rediver/credentials.json",
+//	    CredentialsFile: "/etc/exploop/credentials.json",
 //	    Registration: &platform.RegistrationRequest{
 //	        Name: "scanner-001",
 //	        Capabilities: []string{"sast", "sca"},

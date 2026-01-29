@@ -3,8 +3,8 @@ package core
 import (
 	"strings"
 
-	"github.com/rediverio/sdk/pkg/shared/fingerprint"
-	"github.com/rediverio/sdk/pkg/shared/severity"
+	"github.com/exploopio/sdk/pkg/shared/fingerprint"
+	"github.com/exploopio/sdk/pkg/shared/severity"
 )
 
 // =============================================================================

@@ -1,18 +1,18 @@
-# Rediver SDK
+# Exploop SDK
 
-Go SDK for building security scanners, collectors, and agents that integrate with the Rediver platform.
+Go SDK for building security scanners, collectors, and agents that integrate with the Exploop platform.
 
 ## Installation
 
 ```bash
-go get github.com/rediverio/sdk@latest
+go get github.com/exploopio/sdk@latest
 ```
 
 For private repositories, configure Go to access GitHub:
 
 ```bash
 # Set GOPRIVATE to bypass public proxy
-export GOPRIVATE=github.com/rediverio/*
+export GOPRIVATE=github.com/exploopio/*
 
 # Configure Git authentication (choose one):
 # Option A: SSH key (recommended)
@@ -31,7 +31,7 @@ package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/core"
+    "github.com/exploopio/sdk/pkg/core"
 )
 
 // MyScanner implements core.Scanner interface
@@ -68,8 +68,8 @@ package main
 import (
     "context"
     "encoding/json"
-    "github.com/rediverio/sdk/pkg/core"
-    "github.com/rediverio/sdk/pkg/ris"
+    "github.com/exploopio/sdk/pkg/core"
+    "github.com/exploopio/sdk/pkg/ris"
 )
 
 type MyParser struct{}
@@ -103,7 +103,7 @@ package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/core"
+    "github.com/exploopio/sdk/pkg/core"
 )
 
 type MyCollector struct {
@@ -141,8 +141,8 @@ package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/scanners"
-    "github.com/rediverio/sdk/pkg/core"
+    "github.com/exploopio/sdk/pkg/scanners"
+    "github.com/exploopio/sdk/pkg/core"
 )
 
 func main() {
@@ -172,8 +172,8 @@ func main() {
 package main
 
 import (
-    "github.com/rediverio/sdk/pkg/gitenv"
-    "github.com/rediverio/sdk/pkg/strategy"
+    "github.com/exploopio/sdk/pkg/gitenv"
+    "github.com/exploopio/sdk/pkg/strategy"
 )
 
 func main() {
@@ -197,15 +197,15 @@ func main() {
 }
 ```
 
-### 6. Push Results to Rediver
+### 6. Push Results to Exploop
 
 ```go
 package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/client"
-    "github.com/rediverio/sdk/pkg/ris"
+    "github.com/exploopio/sdk/pkg/client"
+    "github.com/exploopio/sdk/pkg/ris"
 )
 
 func main() {
@@ -213,7 +213,7 @@ func main() {
 
     // Create API client
     apiClient := client.New(&client.Config{
-        BaseURL:  "https://api.rediver.io",
+        BaseURL:  "https://api.exploop.io",
         APIKey:   "your-api-key",
         AgentID: "agent-123",
     })
@@ -239,7 +239,7 @@ package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/platform"
+    "github.com/exploopio/sdk/pkg/platform"
 )
 
 func main() {
@@ -247,7 +247,7 @@ func main() {
 
     // Create platform agent client
     agent := platform.NewAgentClient(&platform.Config{
-        BaseURL:          "https://api.rediver.io",
+        BaseURL:          "https://api.exploop.io",
         BootstrapToken:   os.Getenv("BOOTSTRAP_TOKEN"), // For initial registration
         AgentID:          os.Getenv("AGENT_ID"),        // After registration
         AgentSecret:      os.Getenv("AGENT_SECRET"),    // After registration
@@ -304,7 +304,7 @@ package main
 import (
     "context"
     "time"
-    "github.com/rediverio/sdk/pkg/client"
+    "github.com/exploopio/sdk/pkg/client"
 )
 
 func main() {
@@ -312,7 +312,7 @@ func main() {
 
     // Create client using functional options
     apiClient := client.NewWithOptions(
-        client.WithBaseURL("https://api.rediver.io"),
+        client.WithBaseURL("https://api.exploop.io"),
         client.WithAPIKey("your-api-key"),
         client.WithAgentID("agent-123"),
         client.WithTimeout(30 * time.Second),
@@ -330,7 +330,7 @@ func main() {
 package main
 
 import (
-    "github.com/rediverio/sdk/pkg/client"
+    "github.com/exploopio/sdk/pkg/client"
 )
 
 func handleError(err error) {
@@ -370,7 +370,7 @@ package main
 import (
     "context"
     "log"
-    "github.com/rediverio/sdk/pkg/platform"
+    "github.com/exploopio/sdk/pkg/platform"
 )
 
 func executeJob(job *platform.JobInfo) *platform.JobResult {
@@ -420,8 +420,8 @@ package main
 
 import (
     "context"
-    "github.com/rediverio/sdk/pkg/providers/github"
-    "github.com/rediverio/sdk/pkg/core"
+    "github.com/exploopio/sdk/pkg/providers/github"
+    "github.com/exploopio/sdk/pkg/core"
 )
 
 func main() {
@@ -461,8 +461,8 @@ package main
 import (
     "context"
     "time"
-    "github.com/rediverio/sdk/pkg/client"
-    "github.com/rediverio/sdk/pkg/ris"
+    "github.com/exploopio/sdk/pkg/client"
+    "github.com/exploopio/sdk/pkg/ris"
 )
 
 func main() {
@@ -470,13 +470,13 @@ func main() {
 
     // Create API client with retry queue enabled
     apiClient := client.New(&client.Config{
-        BaseURL:  "https://api.rediver.io",
+        BaseURL:  "https://api.exploop.io",
         APIKey:   "your-api-key",
         AgentID: "agent-123",
 
         // Enable persistent retry queue
         EnableRetryQueue: true,
-        RetryQueueDir:    "~/.rediver/retry-queue", // Default location
+        RetryQueueDir:    "~/.exploop/retry-queue", // Default location
         RetryInterval:    5 * time.Minute,          // Check queue every 5 mins
         RetryMaxAttempts: 10,                       // Max 10 retry attempts
         RetryTTL:         7 * 24 * time.Hour,       // Keep items for 7 days
@@ -509,7 +509,7 @@ func main() {
 
 | Feature | Description |
 |---------|-------------|
-| File-based persistence | Items stored as JSON files in `~/.rediver/retry-queue` |
+| File-based persistence | Items stored as JSON files in `~/.exploop/retry-queue` |
 | Exponential backoff | 5min → 10min → 20min → ... → max 48h |
 | Fingerprint deduplication | Prevents duplicate entries using SHA256 hash |
 | Configurable TTL | Items automatically expire after configured time |
@@ -539,7 +539,7 @@ The SDK provides unified fingerprint generation for deduplication, shared with t
 ```go
 package main
 
-import "github.com/rediverio/sdk/pkg/shared/fingerprint"
+import "github.com/exploopio/sdk/pkg/shared/fingerprint"
 
 func main() {
     // SAST findings
@@ -571,7 +571,7 @@ Unified severity mapping across different scanner formats:
 ```go
 package main
 
-import "github.com/rediverio/sdk/pkg/shared/severity"
+import "github.com/exploopio/sdk/pkg/shared/severity"
 
 func main() {
     // Parse severity from various formats
@@ -603,8 +603,8 @@ func main() {
 sdk/
 ├── pkg/                    # Public library code
 │   ├── core/               # Core interfaces and base implementations
-│   ├── ris/                # RIS (Rediver Ingest Schema) types
-│   ├── client/             # Rediver API client (HTTP + functional options)
+│   ├── ris/                # RIS (Exploop Ingest Schema) types
+│   ├── client/             # Exploop API client (HTTP + functional options)
 │   ├── platform/           # Platform agent client
 │   │   ├── client.go       # Platform agent API client
 │   │   ├── lease.go        # Lease renewal (heartbeat)
@@ -632,7 +632,7 @@ sdk/
 │   ├── strategy/           # Scan strategy determination
 │   └── handler/            # Scan lifecycle handlers
 ├── proto/                  # Protocol Buffer definitions
-│   └── rediver/v1/         # gRPC service definitions
+│   └── exploop/v1/         # gRPC service definitions
 ├── docs/                   # Documentation
 │   ├── ARCHITECTURE.md     # Agent/Component architecture
 │   ├── SECURITY.md         # Security features and best practices
@@ -658,7 +658,7 @@ sdk/
 
 ## RIS Schema
 
-The Rediver Ingest Schema (RIS) is the standard format for all findings:
+The Exploop Ingest Schema (RIS) is the standard format for all findings:
 
 ```go
 type Finding struct {
@@ -696,7 +696,7 @@ type Finding struct {
 
 ```bash
 # From source
-go install github.com/rediverio/sdk/cmd/agent@latest
+go install github.com/exploopio/sdk/cmd/agent@latest
 
 # Or build locally
 make build
@@ -743,31 +743,31 @@ Images are available on both **GitHub Container Registry** and **Docker Hub**:
 
 | Registry | Image | Description | Size |
 |----------|-------|-------------|------|
-| GHCR | `ghcr.io/rediverio/agent:latest` | Full image with all tools | ~1GB |
-| GHCR | `ghcr.io/rediverio/agent:slim` | Minimal (tools mounted) | ~20MB |
-| GHCR | `rediverio/agent:ci` | CI/CD optimized | ~1.2GB |
-| Docker Hub | `rediverio/agent:latest` | Full image with all tools | ~1GB |
-| Docker Hub | `rediverio/agent:slim` | Minimal (tools mounted) | ~20MB |
-| Docker Hub | `rediverio/agent:ci` | CI/CD optimized | ~1.2GB |
+| GHCR | `ghcr.io/exploopio/agent:latest` | Full image with all tools | ~1GB |
+| GHCR | `ghcr.io/exploopio/agent:slim` | Minimal (tools mounted) | ~20MB |
+| GHCR | `exploopio/agent:ci` | CI/CD optimized | ~1.2GB |
+| Docker Hub | `exploopio/agent:latest` | Full image with all tools | ~1GB |
+| Docker Hub | `exploopio/agent:slim` | Minimal (tools mounted) | ~20MB |
+| Docker Hub | `exploopio/agent:ci` | CI/CD optimized | ~1.2GB |
 
 ### Quick Start
 
 ```bash
 # Pull from Docker Hub
-docker pull rediverio/agent:latest
+docker pull exploopio/agent:latest
 
 # Or from GHCR
-docker pull ghcr.io/rediverio/agent:latest
+docker pull ghcr.io/exploopio/agent:latest
 
 # Run scan on current directory
-docker run --rm -v $(pwd):/scan rediverio/agent:latest \
+docker run --rm -v $(pwd):/scan exploopio/agent:latest \
     -tools semgrep,gitleaks,trivy -target /scan -verbose
 
 # Run scan and push results to platform
 docker run --rm -v $(pwd):/scan \
-    -e API_URL=https://api.rediver.io \
+    -e API_URL=https://api.exploop.io \
     -e API_KEY=your-api-key \
-    rediverio/agent:latest \
+    exploopio/agent:latest \
     -tools semgrep,gitleaks,trivy -target /scan -push -verbose
 
 # Using docker-compose
@@ -810,7 +810,7 @@ jobs:
           fetch-depth: 0  # Full history for diff-based scanning
 
       - name: Run Security Scan
-        uses: docker://rediverio/agent:ci
+        uses: docker://exploopio/agent:ci
         with:
           args: >-
             -tools semgrep,gitleaks,trivy
@@ -841,7 +841,7 @@ stages:
 
 security-scan:
   stage: security
-  image: rediverio/agent:ci
+  image: exploopio/agent:ci
   variables:
     GITLAB_TOKEN: $CI_JOB_TOKEN
     API_URL: $API_URL
@@ -871,7 +871,7 @@ security-scan:
 |---------|------|-------------|
 | Auto CI detection | `-auto-ci` | Detects GitHub/GitLab environment automatically |
 | Inline comments | `-comments` | Posts findings as PR/MR inline comments |
-| Push to platform | `-push` | Sends results to Rediver platform |
+| Push to platform | `-push` | Sends results to Exploop platform |
 | SARIF output | `-sarif` | Generates SARIF for security dashboards |
 | Diff-based scan | Automatic | Only scans changed files in MR/PR context |
 

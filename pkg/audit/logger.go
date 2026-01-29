@@ -96,7 +96,7 @@ type LoggerConfig struct {
 	TenantID string
 
 	// LogFile is the path to the audit log file.
-	// Default: ~/.rediver/audit.log
+	// Default: ~/.exploop/audit.log
 	LogFile string
 
 	// MaxSizeMB is the maximum log file size before rotation.
@@ -130,7 +130,7 @@ func DefaultLoggerConfig() *LoggerConfig {
 	}
 
 	return &LoggerConfig{
-		LogFile:       filepath.Join(home, ".rediver", "audit.log"),
+		LogFile:       filepath.Join(home, ".exploop", "audit.log"),
 		MaxSizeMB:     100,
 		MaxAgeDays:    30,
 		BufferSize:    100,
