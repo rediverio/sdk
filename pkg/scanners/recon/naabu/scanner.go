@@ -32,8 +32,8 @@ const (
 type ScanType string
 
 const (
-	ScanTypeSYN     ScanType = "s"       // SYN scan (default, requires root)
-	ScanTypeConnect ScanType = "c"       // Connect scan (no root required)
+	ScanTypeSYN     ScanType = "s" // SYN scan (default, requires root)
+	ScanTypeConnect ScanType = "c" // Connect scan (no root required)
 )
 
 // Scanner implements the ReconScanner interface for naabu.
@@ -44,15 +44,15 @@ type Scanner struct {
 	Verbose bool          // Enable verbose output
 
 	// Scan options
-	Rate      int      // Packets per second
-	Retries   int      // Number of retries
-	ScanType  ScanType // Scan type (SYN or Connect)
+	Rate     int      // Packets per second
+	Retries  int      // Number of retries
+	ScanType ScanType // Scan type (SYN or Connect)
 
 	// Port configuration
-	Ports        string   // Ports to scan: "80,443", "1-1000", "top-100", "top-1000", "full"
-	TopPorts     int      // Top N ports to scan
-	ExcludePorts string   // Ports to exclude
-	PortList     []int    // Explicit port list
+	Ports        string // Ports to scan: "80,443", "1-1000", "top-100", "top-1000", "full"
+	TopPorts     int    // Top N ports to scan
+	ExcludePorts string // Ports to exclude
+	PortList     []int  // Explicit port list
 
 	// Network options
 	Interface string   // Network interface to use

@@ -80,7 +80,7 @@ type Scanner struct {
 	MatchRegex      string   // Regex to match URLs
 
 	// Headless options
-	Headless        bool // Enable headless browser
+	Headless        bool   // Enable headless browser
 	HeadlessOptions string // Headless browser options
 
 	// Proxy

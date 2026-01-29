@@ -237,12 +237,12 @@ func convertSubdomains(report *Report, subdomains []SubdomainInput, opts *ReconC
 		}
 
 		asset := Asset{
-			ID:          fmt.Sprintf("subdomain-%s", normalizeAssetID(sub.Host)),
-			Type:        assetType,
-			Value:       sub.Host,
-			Name:        sub.Host,
-			Criticality: opts.DefaultCriticality,
-			Confidence:  opts.DefaultConfidence,
+			ID:           fmt.Sprintf("subdomain-%s", normalizeAssetID(sub.Host)),
+			Type:         assetType,
+			Value:        sub.Host,
+			Name:         sub.Host,
+			Criticality:  opts.DefaultCriticality,
+			Confidence:   opts.DefaultConfidence,
 			DiscoveredAt: &now,
 			Properties: Properties{
 				"discovery_source": opts.DiscoverySource,
@@ -308,12 +308,12 @@ func convertDNSRecords(report *Report, records []DNSRecordInput, opts *ReconConv
 	// Create asset for each host
 	for host, dnsRecords := range hostRecords {
 		asset := Asset{
-			ID:          fmt.Sprintf("dns-%s", normalizeAssetID(host)),
-			Type:        AssetTypeDomain,
-			Value:       host,
-			Name:        host,
-			Criticality: opts.DefaultCriticality,
-			Confidence:  opts.DefaultConfidence,
+			ID:           fmt.Sprintf("dns-%s", normalizeAssetID(host)),
+			Type:         AssetTypeDomain,
+			Value:        host,
+			Name:         host,
+			Criticality:  opts.DefaultCriticality,
+			Confidence:   opts.DefaultConfidence,
 			DiscoveredAt: &now,
 			Technical: &AssetTechnical{
 				Domain: &DomainTechnical{
@@ -378,12 +378,12 @@ func convertOpenPorts(report *Report, ports []OpenPortInput, opts *ReconConverte
 			info := hostInfo[key]
 
 			asset := Asset{
-				ID:          fmt.Sprintf("ip-%s", normalizeAssetID(key)),
-				Type:        AssetTypeIPAddress,
-				Value:       key,
-				Name:        key,
-				Criticality: opts.DefaultCriticality,
-				Confidence:  opts.DefaultConfidence,
+				ID:           fmt.Sprintf("ip-%s", normalizeAssetID(key)),
+				Type:         AssetTypeIPAddress,
+				Value:        key,
+				Name:         key,
+				Criticality:  opts.DefaultCriticality,
+				Confidence:   opts.DefaultConfidence,
 				DiscoveredAt: &now,
 				Technical: &AssetTechnical{
 					IPAddress: &IPAddressTechnical{
@@ -423,12 +423,12 @@ func convertOpenPorts(report *Report, ports []OpenPortInput, opts *ReconConverte
 			}
 
 			asset := Asset{
-				ID:          fmt.Sprintf("port-%s-%d", normalizeAssetID(key), p.Port),
-				Type:        AssetTypeOpenPort,
-				Value:       fmt.Sprintf("%s:%d", key, p.Port),
-				Name:        fmt.Sprintf("%s:%d/%s", key, p.Port, p.Protocol),
-				Criticality: opts.DefaultCriticality,
-				Confidence:  opts.DefaultConfidence,
+				ID:           fmt.Sprintf("port-%s-%d", normalizeAssetID(key), p.Port),
+				Type:         AssetTypeOpenPort,
+				Value:        fmt.Sprintf("%s:%d", key, p.Port),
+				Name:         fmt.Sprintf("%s:%d/%s", key, p.Port, p.Protocol),
+				Criticality:  opts.DefaultCriticality,
+				Confidence:   opts.DefaultConfidence,
 				DiscoveredAt: &now,
 				Properties: Properties{
 					"discovery_source": opts.DiscoverySource,
@@ -464,12 +464,12 @@ func convertLiveHosts(report *Report, hosts []LiveHostInput, opts *ReconConverte
 		}
 
 		asset := Asset{
-			ID:          fmt.Sprintf("http-%s", normalizeAssetID(h.URL)),
-			Type:        assetType,
-			Value:       h.URL,
-			Name:        h.Host,
-			Criticality: opts.DefaultCriticality,
-			Confidence:  opts.DefaultConfidence,
+			ID:           fmt.Sprintf("http-%s", normalizeAssetID(h.URL)),
+			Type:         assetType,
+			Value:        h.URL,
+			Name:         h.Host,
+			Criticality:  opts.DefaultCriticality,
+			Confidence:   opts.DefaultConfidence,
 			DiscoveredAt: &now,
 			Technical: &AssetTechnical{
 				Service: &ServiceTechnical{
@@ -539,12 +539,12 @@ func convertDiscoveredURLs(report *Report, urls []DiscoveredURLInput, opts *Reco
 		}
 
 		asset := Asset{
-			ID:          fmt.Sprintf("url-%s", normalizeAssetID(u.URL)),
-			Type:        AssetTypeDiscoveredURL,
-			Value:       u.URL,
-			Name:        truncateString(u.URL, 255),
-			Criticality: opts.DefaultCriticality,
-			Confidence:  opts.DefaultConfidence,
+			ID:           fmt.Sprintf("url-%s", normalizeAssetID(u.URL)),
+			Type:         AssetTypeDiscoveredURL,
+			Value:        u.URL,
+			Name:         truncateString(u.URL, 255),
+			Criticality:  opts.DefaultCriticality,
+			Confidence:   opts.DefaultConfidence,
 			DiscoveredAt: &now,
 			Properties: Properties{
 				"discovery_source": opts.DiscoverySource,

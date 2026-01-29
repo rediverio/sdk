@@ -226,7 +226,7 @@ func (c *Compressor) decompressGzip(data []byte) ([]byte, error) {
 type CompressionStats struct {
 	OriginalSize   int     `json:"original_size"`
 	CompressedSize int     `json:"compressed_size"`
-	Ratio          float64 `json:"ratio"`          // compressed/original
+	Ratio          float64 `json:"ratio"`           // compressed/original
 	Savings        float64 `json:"savings_percent"` // (1 - ratio) * 100
 	Algorithm      string  `json:"algorithm"`
 }

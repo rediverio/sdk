@@ -54,14 +54,14 @@ const (
 
 // MetricDefinition defines a metric with its metadata.
 type MetricDefinition struct {
-	Name        string     `json:"name"`
-	Type        MetricType `json:"type"`
-	Help        string     `json:"help"`
-	Labels      []string   `json:"labels,omitempty"`
-	Buckets     []float64  `json:"buckets,omitempty"`     // For histograms
-	Objectives  []float64  `json:"objectives,omitempty"`  // For summaries
-	MaxAge      int        `json:"max_age,omitempty"`     // For summaries (seconds)
-	AgeBuckets  int        `json:"age_buckets,omitempty"` // For summaries
+	Name       string     `json:"name"`
+	Type       MetricType `json:"type"`
+	Help       string     `json:"help"`
+	Labels     []string   `json:"labels,omitempty"`
+	Buckets    []float64  `json:"buckets,omitempty"`     // For histograms
+	Objectives []float64  `json:"objectives,omitempty"`  // For summaries
+	MaxAge     int        `json:"max_age,omitempty"`     // For summaries (seconds)
+	AgeBuckets int        `json:"age_buckets,omitempty"` // For summaries
 }
 
 // =============================================================================
@@ -207,15 +207,15 @@ var (
 // Use this when metrics are not needed.
 type NopCollector struct{}
 
-func (c *NopCollector) CounterInc(name string, labels ...string)              {}
-func (c *NopCollector) CounterAdd(name string, value float64, labels ...string) {}
-func (c *NopCollector) GaugeSet(name string, value float64, labels ...string)   {}
-func (c *NopCollector) GaugeInc(name string, labels ...string)                  {}
-func (c *NopCollector) GaugeDec(name string, labels ...string)                  {}
+func (c *NopCollector) CounterInc(name string, labels ...string)                      {}
+func (c *NopCollector) CounterAdd(name string, value float64, labels ...string)       {}
+func (c *NopCollector) GaugeSet(name string, value float64, labels ...string)         {}
+func (c *NopCollector) GaugeInc(name string, labels ...string)                        {}
+func (c *NopCollector) GaugeDec(name string, labels ...string)                        {}
 func (c *NopCollector) HistogramObserve(name string, value float64, labels ...string) {}
 func (c *NopCollector) SummaryObserve(name string, value float64, labels ...string)   {}
-func (c *NopCollector) Handler() http.Handler { return http.NotFoundHandler() }
-func (c *NopCollector) Reset()                {}
+func (c *NopCollector) Handler() http.Handler                                         { return http.NotFoundHandler() }
+func (c *NopCollector) Reset()                                                        {}
 
 // =============================================================================
 // InMemoryCollector - Simple in-memory implementation for testing

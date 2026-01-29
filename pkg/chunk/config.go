@@ -61,10 +61,10 @@ type Config struct {
 	CompressionLevel int // gzip/zstd level 1-9 (default: 3)
 
 	// Auto-cleanup configuration
-	AutoCleanupOnUpload    bool // Delete chunk data immediately after successful upload (default: true)
+	AutoCleanupOnUpload     bool // Delete chunk data immediately after successful upload (default: true)
 	CleanupOnReportComplete bool // Delete all chunks when report completes (default: true)
-	CleanupIntervalMinutes int  // How often to run cleanup in minutes (default: 15)
-	AggressiveCleanup      bool // Enable aggressive cleanup when storage exceeds MaxStorageMB (default: true)
+	CleanupIntervalMinutes  int  // How often to run cleanup in minutes (default: 15)
+	AggressiveCleanup       bool // Enable aggressive cleanup when storage exceeds MaxStorageMB (default: true)
 }
 
 // DefaultConfig returns sensible defaults for most environments.

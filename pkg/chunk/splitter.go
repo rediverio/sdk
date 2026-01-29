@@ -104,11 +104,11 @@ func (s *Splitter) Split(report *ris.Report) ([]*ChunkData, error) {
 		}
 
 		chunk := &ChunkData{
-			ReportID:    reportID,
-			ChunkIndex:  chunkIndex,
-			Assets:      currentAssets,
-			Findings:    currentFindings,
-			IsFinal:     isFinal,
+			ReportID:   reportID,
+			ChunkIndex: chunkIndex,
+			Assets:     currentAssets,
+			Findings:   currentFindings,
+			IsFinal:    isFinal,
 		}
 
 		// First chunk includes tool and metadata

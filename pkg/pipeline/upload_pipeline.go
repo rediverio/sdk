@@ -104,11 +104,11 @@ type Pipeline struct {
 	wg      sync.WaitGroup
 
 	// Stats
-	submitted   int64
-	completed   int64
-	failed      int64
-	inProgress  int32
-	totalBytes  int64
+	submitted  int64
+	completed  int64
+	failed     int64
+	inProgress int32
+	totalBytes int64
 }
 
 // NewPipeline creates a new upload pipeline.
@@ -337,7 +337,9 @@ func (p *Pipeline) processItem(ctx context.Context, item *QueueItem) {
 
 		// Apply backoff for retries
 		if attempt > 0 {
-			backoff := p.config.RetryDelay * time.Duration(1<<uint(attempt-1))
+			// Cap the shift to avoid overflow (max ~32 retries is more than enough)
+			shift := min(attempt-1, 30)
+			backoff := p.config.RetryDelay * time.Duration(1<<shift) //nolint:gosec // shift is capped
 			select {
 			case <-ctx.Done():
 				return

@@ -90,19 +90,19 @@ type MetricsCollector interface {
 // LeaseManager manages the agent's lease with the control plane.
 // It periodically renews the lease to indicate the agent is healthy.
 type LeaseManager struct {
-	client           LeaseClient
-	config           *LeaseConfig
-	holderIdentity   string
-	currentJobs      int
-	jobsCompleted    int
-	jobsFailed       int
-	resourceVersion  int
-	lastRenewTime    time.Time
-	lastError        error
-	mu               sync.RWMutex
-	running          bool
-	stopCh           chan struct{}
-	wg               sync.WaitGroup
+	client          LeaseClient
+	config          *LeaseConfig
+	holderIdentity  string
+	currentJobs     int
+	jobsCompleted   int
+	jobsFailed      int
+	resourceVersion int
+	lastRenewTime   time.Time
+	lastError       error
+	mu              sync.RWMutex
+	running         bool
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 // NewLeaseManager creates a new LeaseManager.

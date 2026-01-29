@@ -31,7 +31,7 @@ type Checker interface {
 // CheckFunc is a function type that implements Checker.
 type CheckFunc func(ctx context.Context) CheckResult
 
-func (f CheckFunc) Name() string { return "" }
+func (f CheckFunc) Name() string                          { return "" }
 func (f CheckFunc) Check(ctx context.Context) CheckResult { return f(ctx) }
 
 // =============================================================================
@@ -296,7 +296,7 @@ func (h *Handler) LivenessHandler() http.Handler {
 
 		// Liveness is always OK if we can serve this response
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":    StatusHealthy,
 			"timestamp": time.Now(),
 		})
@@ -311,7 +311,7 @@ func (h *Handler) ReadinessHandler() http.Handler {
 
 		if !h.IsReady() {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"status":    StatusUnhealthy,
 				"message":   "service not ready",
 				"timestamp": time.Now(),
@@ -328,7 +328,7 @@ func (h *Handler) ReadinessHandler() http.Handler {
 			w.WriteHeader(http.StatusOK)
 		}
 
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 }
 
@@ -351,7 +351,7 @@ func (h *Handler) HealthHandler() http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 }
 
@@ -495,7 +495,8 @@ func (c *DiskCheck) Check(ctx context.Context) CheckResult {
 			return result
 		}
 	} else if c.MinFreeBytes > 0 {
-		if int64(freeBytes) < c.MinFreeBytes {
+		// Safe comparison: convert threshold to uint64 instead of converting freeBytes to int64
+		if freeBytes < uint64(c.MinFreeBytes) { //nolint:gosec // MinFreeBytes is always positive here
 			result.Status = StatusUnhealthy
 			result.Error = fmt.Sprintf("disk free space %d bytes is below threshold %d bytes", freeBytes, c.MinFreeBytes)
 			return result
@@ -545,45 +546,8 @@ func (c *MemoryCheck) Check(ctx context.Context) CheckResult {
 	return result
 }
 
-// SystemMemoryCheck checks system-wide memory usage (Linux only).
-type SystemMemoryCheck struct {
-	MaxUsagePercent float64
-}
-
-func (c *SystemMemoryCheck) Name() string { return "system_memory" }
-func (c *SystemMemoryCheck) Check(ctx context.Context) CheckResult {
-	result := CheckResult{
-		Timestamp: time.Now(),
-		Metadata:  make(map[string]any),
-	}
-
-	var info unix.Sysinfo_t
-	if err := unix.Sysinfo(&info); err != nil {
-		result.Status = StatusUnhealthy
-		result.Error = fmt.Sprintf("failed to get system memory info: %v", err)
-		return result
-	}
-
-	totalMem := info.Totalram * uint64(info.Unit)
-	freeMem := info.Freeram * uint64(info.Unit)
-	usedMem := totalMem - freeMem
-	usagePercent := float64(usedMem) / float64(totalMem) * 100
-
-	result.Metadata["total_bytes"] = totalMem
-	result.Metadata["free_bytes"] = freeMem
-	result.Metadata["used_bytes"] = usedMem
-	result.Metadata["usage_percent"] = fmt.Sprintf("%.2f%%", usagePercent)
-
-	if c.MaxUsagePercent > 0 && usagePercent > c.MaxUsagePercent {
-		result.Status = StatusUnhealthy
-		result.Error = fmt.Sprintf("memory usage %.2f%% exceeds threshold %.2f%%", usagePercent, c.MaxUsagePercent)
-		return result
-	}
-
-	result.Status = StatusHealthy
-	result.Message = fmt.Sprintf("memory usage: %.2f%%", usagePercent)
-	return result
-}
+// SystemMemoryCheck is defined in sysinfo_linux.go and sysinfo_other.go
+// for platform-specific implementations.
 
 // =============================================================================
 // Global Default Handler

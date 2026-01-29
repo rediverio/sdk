@@ -147,7 +147,7 @@ func Generate(input Input) string {
 		// This handles dynamic findings from Nuclei, ZAP, etc.
 		// Parameter name (not value) is used to avoid ?id=1 vs ?id=2 mismatches
 		data = fmt.Sprintf("dast:%s:%s:%s:%s",
-			normalize(input.RuleID),    // Template ID
+			normalize(input.RuleID), // Template ID
 			normalizeHost(input.TargetHost),
 			normalizePath(input.TargetPath),
 			normalize(input.Parameter),

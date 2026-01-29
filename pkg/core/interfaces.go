@@ -827,9 +827,9 @@ type LiveHost struct {
 
 // DiscoveredURL represents a discovered URL/endpoint.
 type DiscoveredURL struct {
-	URL        string `json:"url"`                  // Full URL
-	Method     string `json:"method,omitempty"`     // HTTP method (GET, POST, etc.)
-	Source     string `json:"source,omitempty"`     // Discovery source (crawl, js, archive)
+	URL        string `json:"url"`              // Full URL
+	Method     string `json:"method,omitempty"` // HTTP method (GET, POST, etc.)
+	Source     string `json:"source,omitempty"` // Discovery source (crawl, js, archive)
 	StatusCode int    `json:"status_code,omitempty"`
 	Depth      int    `json:"depth,omitempty"`     // Crawl depth
 	Parent     string `json:"parent,omitempty"`    // Parent URL

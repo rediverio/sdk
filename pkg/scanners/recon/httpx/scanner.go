@@ -63,14 +63,14 @@ type Scanner struct {
 	IP            bool // Extract IP
 
 	// TLS options
-	TLSProbe   bool // Extract TLS data
-	TLSGrab    bool // Grab TLS certificate
+	TLSProbe bool // Extract TLS data
+	TLSGrab  bool // Grab TLS certificate
 
 	// Filters
-	MatchCodes    []int // Match these status codes
-	FilterCodes   []int // Filter these status codes
-	MatchString   string // Match response body string
-	FilterString  string // Filter response body string
+	MatchCodes   []int  // Match these status codes
+	FilterCodes  []int  // Filter these status codes
+	MatchString  string // Match response body string
+	FilterString string // Filter response body string
 
 	// Output options
 	OutputFile string // Output file path
@@ -480,7 +480,7 @@ func (s *Scanner) parseOutput(data []byte) ([]core.LiveHost, []core.Technology, 
 		// Parse port
 		port := 0
 		if output.Port != "" {
-			fmt.Sscanf(output.Port, "%d", &port)
+			_, _ = fmt.Sscanf(output.Port, "%d", &port)
 		}
 
 		// Parse response time
@@ -488,10 +488,10 @@ func (s *Scanner) parseOutput(data []byte) ([]core.LiveHost, []core.Technology, 
 		if output.ResponseTime != "" {
 			// Format: "123ms" or "1.23s"
 			if strings.HasSuffix(output.ResponseTime, "ms") {
-				fmt.Sscanf(output.ResponseTime, "%dms", &responseTime)
+				_, _ = fmt.Sscanf(output.ResponseTime, "%dms", &responseTime)
 			} else if strings.HasSuffix(output.ResponseTime, "s") {
 				var seconds float64
-				fmt.Sscanf(output.ResponseTime, "%fs", &seconds)
+				_, _ = fmt.Sscanf(output.ResponseTime, "%fs", &seconds)
 				responseTime = int64(seconds * 1000)
 			}
 		}

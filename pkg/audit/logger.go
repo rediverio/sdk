@@ -22,9 +22,9 @@ type EventType string
 
 const (
 	// Lifecycle events
-	EventAgentStart   EventType = "agent_start"
-	EventAgentStop    EventType = "agent_stop"
-	EventAgentError   EventType = "agent_error"
+	EventAgentStart EventType = "agent_start"
+	EventAgentStop  EventType = "agent_stop"
+	EventAgentError EventType = "agent_error"
 
 	// Job events
 	EventJobReceived  EventType = "job_received"
@@ -45,10 +45,10 @@ const (
 	EventUploadRetry     EventType = "upload_retry"
 
 	// Chunk events
-	EventChunkCreated   EventType = "chunk_created"
-	EventChunkUploaded  EventType = "chunk_uploaded"
-	EventChunkFailed    EventType = "chunk_failed"
-	EventChunkCleanup   EventType = "chunk_cleanup"
+	EventChunkCreated  EventType = "chunk_created"
+	EventChunkUploaded EventType = "chunk_uploaded"
+	EventChunkFailed   EventType = "chunk_failed"
+	EventChunkCleanup  EventType = "chunk_cleanup"
 
 	// Resource events
 	EventResourceThrottle EventType = "resource_throttle"
@@ -74,17 +74,17 @@ const (
 
 // Event represents an audit event.
 type Event struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Type        EventType              `json:"type"`
-	Severity    Severity               `json:"severity"`
-	AgentID     string                 `json:"agent_id,omitempty"`
-	TenantID    string                 `json:"tenant_id,omitempty"`
-	JobID       string                 `json:"job_id,omitempty"`
-	ReportID    string                 `json:"report_id,omitempty"`
-	Message     string                 `json:"message"`
-	Error       string                 `json:"error,omitempty"`
-	Duration    time.Duration          `json:"duration_ms,omitempty"`
-	Details     map[string]interface{} `json:"details,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Type      EventType              `json:"type"`
+	Severity  Severity               `json:"severity"`
+	AgentID   string                 `json:"agent_id,omitempty"`
+	TenantID  string                 `json:"tenant_id,omitempty"`
+	JobID     string                 `json:"job_id,omitempty"`
+	ReportID  string                 `json:"report_id,omitempty"`
+	Message   string                 `json:"message"`
+	Error     string                 `json:"error,omitempty"`
+	Duration  time.Duration          `json:"duration_ms,omitempty"`
+	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
 // LoggerConfig configures the audit logger.
@@ -178,8 +178,8 @@ func NewLogger(config *LoggerConfig) (*Logger, error) {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
-	// Open log file for append
-	file, err := os.OpenFile(config.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// Open log file for append (0640 = owner read/write, group read)
+	file, err := os.OpenFile(config.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)
 	}
@@ -366,16 +366,16 @@ func (l *Logger) Flush() {
 		if err != nil {
 			continue
 		}
-		l.file.Write(data)
-		l.file.Write([]byte("\n"))
+		_, _ = l.file.Write(data)
+		_, _ = l.file.Write([]byte("\n"))
 	}
 
 	// Sync to disk
-	l.file.Sync()
+	_ = l.file.Sync()
 
 	// Send to remote if configured
 	if l.remoteSender != nil {
-		go l.remoteSender(events)
+		go l.remoteSender(events) //nolint:errcheck // async send, errors handled internally
 	}
 }
 

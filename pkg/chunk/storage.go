@@ -546,7 +546,7 @@ func (s *Storage) GetStorageStats(ctx context.Context) (*StorageStats, error) {
 
 	// Get total storage size
 	var totalSize sql.NullInt64
-	s.db.QueryRowContext(ctx, `SELECT SUM(compressed_size) FROM chunks`).Scan(&totalSize)
+	_ = s.db.QueryRowContext(ctx, `SELECT SUM(compressed_size) FROM chunks`).Scan(&totalSize)
 	if totalSize.Valid {
 		stats.TotalStorageBytes = totalSize.Int64
 	}
@@ -609,7 +609,7 @@ func (s *Storage) CleanupToSize(ctx context.Context, maxBytes int64) (int, error
 	for {
 		// Check current size
 		var currentSize sql.NullInt64
-		s.db.QueryRowContext(ctx, `SELECT SUM(compressed_size) FROM chunks`).Scan(&currentSize)
+		_ = s.db.QueryRowContext(ctx, `SELECT SUM(compressed_size) FROM chunks`).Scan(&currentSize)
 		if !currentSize.Valid || currentSize.Int64 <= maxBytes {
 			break
 		}

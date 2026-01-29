@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -56,8 +57,8 @@ func NewPrometheusCollector(cfg *PrometheusConfig) *PrometheusCollector {
 	if registry == nil {
 		registry = prometheus.NewRegistry()
 		// Register standard Go metrics
-		registry.MustRegister(prometheus.NewGoCollector())
-		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+		registry.MustRegister(collectors.NewGoCollector())
+		registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	}
 
 	c := &PrometheusCollector{
@@ -80,35 +81,35 @@ func NewPrometheusCollector(cfg *PrometheusConfig) *PrometheusCollector {
 // registerDefaultMetrics registers the standard Rediver SDK metrics.
 func (c *PrometheusCollector) registerDefaultMetrics() {
 	// Scanner metrics
-	c.RegisterCounter(ScannerScansTotal)
-	c.RegisterHistogram(ScannerScanDuration)
-	c.RegisterCounter(ScannerFindingsTotal)
+	_ = c.RegisterCounter(ScannerScansTotal)
+	_ = c.RegisterHistogram(ScannerScanDuration)
+	_ = c.RegisterCounter(ScannerFindingsTotal)
 
 	// Collector metrics
-	c.RegisterCounter(CollectorCollectsTotal)
-	c.RegisterCounter(CollectorItemsTotal)
+	_ = c.RegisterCounter(CollectorCollectsTotal)
+	_ = c.RegisterCounter(CollectorItemsTotal)
 
 	// Pusher metrics
-	c.RegisterCounter(PusherPushesTotal)
-	c.RegisterCounter(PusherFindingsPushed)
-	c.RegisterCounter(PusherAssetsPushed)
-	c.RegisterCounter(PusherRetries)
+	_ = c.RegisterCounter(PusherPushesTotal)
+	_ = c.RegisterCounter(PusherFindingsPushed)
+	_ = c.RegisterCounter(PusherAssetsPushed)
+	_ = c.RegisterCounter(PusherRetries)
 
 	// Agent metrics
-	c.RegisterCounter(AgentJobsTotal)
-	c.RegisterHistogram(AgentJobDuration)
-	c.RegisterGauge(AgentQueueSize)
-	c.RegisterGauge(AgentActiveJobs)
-	c.RegisterCounter(AgentHeartbeats)
+	_ = c.RegisterCounter(AgentJobsTotal)
+	_ = c.RegisterHistogram(AgentJobDuration)
+	_ = c.RegisterGauge(AgentQueueSize)
+	_ = c.RegisterGauge(AgentActiveJobs)
+	_ = c.RegisterCounter(AgentHeartbeats)
 
 	// Enricher metrics
-	c.RegisterCounter(EnricherEnrichmentsTotal)
-	c.RegisterCounter(EnricherCacheHits)
-	c.RegisterCounter(EnricherCacheMisses)
+	_ = c.RegisterCounter(EnricherEnrichmentsTotal)
+	_ = c.RegisterCounter(EnricherCacheHits)
+	_ = c.RegisterCounter(EnricherCacheMisses)
 
 	// HTTP client metrics
-	c.RegisterCounter(HTTPRequestsTotal)
-	c.RegisterHistogram(HTTPRequestDuration)
+	_ = c.RegisterCounter(HTTPRequestsTotal)
+	_ = c.RegisterHistogram(HTTPRequestDuration)
 }
 
 // =============================================================================

@@ -50,11 +50,11 @@ const Version = "1.0.0"
 
 // Default configuration values.
 const (
-	DefaultLeaseDuration   = 60 * time.Second
-	DefaultRenewInterval   = 20 * time.Second
-	DefaultPollTimeout     = 30 * time.Second
+	DefaultLeaseDuration     = 60 * time.Second
+	DefaultRenewInterval     = 20 * time.Second
+	DefaultPollTimeout       = 30 * time.Second
 	DefaultMaxConcurrentJobs = 5
-	DefaultBootstrapTimeout = 30 * time.Second
+	DefaultBootstrapTimeout  = 30 * time.Second
 )
 
 // AgentCredentials contains the credentials returned after agent registration.
@@ -66,11 +66,11 @@ type AgentCredentials struct {
 
 // AgentInfo contains information about a registered platform agent.
 type AgentInfo struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Capabilities []string `json:"capabilities"`
-	Region       string   `json:"region"`
-	Status       string   `json:"status"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Capabilities []string  `json:"capabilities"`
+	Region       string    `json:"region"`
+	Status       string    `json:"status"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -86,14 +86,14 @@ type LeaseInfo struct {
 
 // JobInfo contains information about a platform job.
 type JobInfo struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Priority    int                    `json:"priority"`
-	TenantID    string                 `json:"tenant_id"`
-	Payload     map[string]interface{} `json:"payload"`
-	AuthToken   string                 `json:"auth_token"` // JWT for tenant data access
-	CreatedAt   time.Time              `json:"created_at"`
-	TimeoutSec  int                    `json:"timeout_seconds"`
+	ID         string                 `json:"id"`
+	Type       string                 `json:"type"`
+	Priority   int                    `json:"priority"`
+	TenantID   string                 `json:"tenant_id"`
+	Payload    map[string]interface{} `json:"payload"`
+	AuthToken  string                 `json:"auth_token"` // JWT for tenant data access
+	CreatedAt  time.Time              `json:"created_at"`
+	TimeoutSec int                    `json:"timeout_seconds"`
 
 	// WorkflowContext is set when the job was triggered by a workflow.
 	// It allows correlating job execution with workflow runs.

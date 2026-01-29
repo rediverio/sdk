@@ -102,14 +102,14 @@ var _ JobClient = (*PlatformClient)(nil)
 
 // AgentBuilder provides a fluent API for building a platform agent.
 type AgentBuilder struct {
-	config          *ClientConfig
-	leaseConfig     *LeaseConfig
-	pollerConfig    *PollerConfig
-	executor        JobExecutor
+	config           *ClientConfig
+	leaseConfig      *LeaseConfig
+	pollerConfig     *PollerConfig
+	executor         JobExecutor
 	metricsCollector MetricsCollector
-	onLeaseExpired  func()
-	onJobStarted    func(*JobInfo)
-	onJobCompleted  func(*JobInfo, *JobResult)
+	onLeaseExpired   func()
+	onJobStarted     func(*JobInfo)
+	onJobCompleted   func(*JobInfo, *JobResult)
 
 	// SDK integrations
 	resourceConfig *resource.ControllerConfig
@@ -474,7 +474,7 @@ func (a *PlatformAgent) stopHelpers() {
 	// Stop pipeline first (wait for pending uploads)
 	if a.uploadPipeline != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		a.uploadPipeline.Stop(ctx)
+		_ = a.uploadPipeline.Stop(ctx)
 		cancel()
 	}
 
@@ -488,7 +488,7 @@ func (a *PlatformAgent) stopHelpers() {
 	}
 	if a.auditLogger != nil {
 		a.auditLogger.Flush()
-		a.auditLogger.Stop()
+		_ = a.auditLogger.Stop()
 	}
 }
 

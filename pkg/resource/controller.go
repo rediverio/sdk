@@ -91,11 +91,9 @@ type Controller struct {
 	jobSemaphore chan struct{}
 
 	// CPU sampling state
-	lastCPUTime     uint64
-	lastSampleTime  time.Time
-	cpuSamples      []float64
-	cpuSamplesMu    sync.Mutex
-	maxCPUSamples   int
+	cpuSamples    []float64
+	cpuSamplesMu  sync.Mutex
+	maxCPUSamples int
 }
 
 // NewController creates a new resource controller.
@@ -349,9 +347,13 @@ func (c *Controller) sampleMetrics() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	// Safe conversion: memory values in MB will never exceed int64 max
+	allocMB := m.Alloc / 1024 / 1024
+	sysMB := m.Sys / 1024 / 1024
+
 	metrics := &SystemMetrics{
-		MemoryUsedMB:  int64(m.Alloc / 1024 / 1024),
-		MemoryTotalMB: int64(m.Sys / 1024 / 1024),
+		MemoryUsedMB:  int64(min(allocMB, uint64(1<<62))), //nolint:gosec // MB values are safe
+		MemoryTotalMB: int64(min(sysMB, uint64(1<<62))),   //nolint:gosec // MB values are safe
 		NumGoroutines: runtime.NumGoroutine(),
 		NumCPU:        runtime.NumCPU(),
 		Timestamp:     time.Now(),

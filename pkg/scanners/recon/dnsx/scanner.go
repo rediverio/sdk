@@ -41,10 +41,10 @@ type Scanner struct {
 	Resolvers []string // Custom DNS resolvers
 
 	// Query options
-	RecordTypes    []string // DNS record types to query (A, AAAA, CNAME, MX, NS, TXT, SOA, PTR, CAA)
-	QueryAll       bool     // Query all record types
-	ResponseOnly   bool     // Output only response values
-	RespectWildcard bool    // Respect wildcard responses
+	RecordTypes     []string // DNS record types to query (A, AAAA, CNAME, MX, NS, TXT, SOA, PTR, CAA)
+	QueryAll        bool     // Query all record types
+	ResponseOnly    bool     // Output only response values
+	RespectWildcard bool     // Respect wildcard responses
 
 	// Output options
 	OutputFile string // Output file path
@@ -52,9 +52,9 @@ type Scanner struct {
 	OutputJSON bool   // JSON output
 
 	// Filters
-	OutputCDN      bool // Output CDN info
-	OutputASN      bool // Output ASN info
-	OutputHostIP   bool // Output host:ip pairs
+	OutputCDN    bool // Output CDN info
+	OutputASN    bool // Output ASN info
+	OutputHostIP bool // Output host:ip pairs
 
 	// Internal
 	version string

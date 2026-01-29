@@ -15,7 +15,6 @@ import (
 type mockUploader struct {
 	uploadFunc func(ctx context.Context, report *ris.Report) (*Result, error)
 	uploads    int32
-	mu         sync.Mutex
 }
 
 func (m *mockUploader) Upload(ctx context.Context, report *ris.Report) (*Result, error) {

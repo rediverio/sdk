@@ -28,16 +28,16 @@ const (
 
 // KEVEntry represents a Known Exploited Vulnerability entry.
 type KEVEntry struct {
-	CVEID             string    `json:"cveID"`
-	VendorProject     string    `json:"vendorProject"`
-	Product           string    `json:"product"`
-	VulnerabilityName string    `json:"vulnerabilityName"`
-	DateAdded         string    `json:"dateAdded"`
-	ShortDescription  string    `json:"shortDescription"`
-	RequiredAction    string    `json:"requiredAction"`
-	DueDate           string    `json:"dueDate"`
-	KnownRansomware   string    `json:"knownRansomwareCampaignUse"`
-	Notes             string    `json:"notes"`
+	CVEID             string `json:"cveID"`
+	VendorProject     string `json:"vendorProject"`
+	Product           string `json:"product"`
+	VulnerabilityName string `json:"vulnerabilityName"`
+	DateAdded         string `json:"dateAdded"`
+	ShortDescription  string `json:"shortDescription"`
+	RequiredAction    string `json:"requiredAction"`
+	DueDate           string `json:"dueDate"`
+	KnownRansomware   string `json:"knownRansomwareCampaignUse"`
+	Notes             string `json:"notes"`
 
 	// Parsed dates
 	AddedAt  time.Time `json:"-"`

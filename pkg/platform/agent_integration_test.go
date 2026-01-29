@@ -413,10 +413,10 @@ func TestAgentBuilder_FluentAPI(t *testing.T) {
 	builder := NewAgentBuilder().
 		WithCredentials("http://localhost:8080", "key", "id").
 		WithExecutor(executor).
-		WithLeaseDuration(60 * time.Second).
-		WithRenewInterval(20 * time.Second).
+		WithLeaseDuration(60*time.Second).
+		WithRenewInterval(20*time.Second).
 		WithMaxJobs(4).
-		WithPollTimeout(30 * time.Second).
+		WithPollTimeout(30*time.Second).
 		WithCapabilities("sast", "sca").
 		WithVerbose(true).
 		OnLeaseExpired(func() {}).

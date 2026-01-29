@@ -30,16 +30,16 @@ type JobClient interface {
 
 // PollRequest contains the data for polling jobs.
 type PollRequest struct {
-	MaxJobs       int      `json:"max_jobs"`
-	Capabilities  []string `json:"capabilities,omitempty"`
-	TimeoutSeconds int     `json:"timeout_seconds,omitempty"`
+	MaxJobs        int      `json:"max_jobs"`
+	Capabilities   []string `json:"capabilities,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
 }
 
 // PollResponse contains the response from job polling.
 type PollResponse struct {
-	Jobs              []*JobInfo `json:"jobs"`
-	PollIntervalHint  int        `json:"poll_interval_hint,omitempty"` // Suggested wait before next poll
-	QueueDepth        int        `json:"queue_depth,omitempty"`        // Total pending jobs
+	Jobs             []*JobInfo `json:"jobs"`
+	PollIntervalHint int        `json:"poll_interval_hint,omitempty"` // Suggested wait before next poll
+	QueueDepth       int        `json:"queue_depth,omitempty"`        // Total pending jobs
 }
 
 // JobExecutor executes platform jobs.
