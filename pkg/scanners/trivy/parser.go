@@ -231,11 +231,13 @@ func (p *Parser) parseVulnerability(result *Result, vuln *Vulnerability, opts *c
 	// Generate fingerprint
 	fingerprint := p.generateFingerprint(vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion, result.Target)
 
+	title := p.buildVulnTitle(vuln)
 	finding := eis.Finding{
 		ID:          vuln.VulnerabilityID,
 		Type:        eis.FindingTypeVulnerability,
-		Title:       p.buildVulnTitle(vuln),
+		Title:       title,
 		Description: vuln.Description,
+		Message:     title, // Primary display text
 		Severity:    eis.Severity(GetRISSeverity(vuln.Severity)),
 		Confidence:  100, // Trivy is deterministic
 		RuleID:      vuln.VulnerabilityID,
@@ -344,6 +346,7 @@ func (p *Parser) parseMisconfiguration(result *Result, misconfig *Misconfigurati
 		Type:        eis.FindingTypeMisconfiguration,
 		Title:       misconfig.Title,
 		Description: misconfig.Description,
+		Message:     misconfig.Title, // Primary display text
 		Severity:    eis.Severity(GetRISSeverity(misconfig.Severity)),
 		Confidence:  100,
 		RuleID:      misconfig.ID,
@@ -437,6 +440,7 @@ func (p *Parser) parseSecret(result *Result, secret *Secret, opts *core.ParseOpt
 		Type:        eis.FindingTypeSecret,
 		Title:       secret.Title,
 		Description: fmt.Sprintf("Secret detected: %s", secret.Category),
+		Message:     secret.Title, // Primary display text
 		Severity:    eis.Severity(GetRISSeverity(secret.Severity)),
 		Confidence:  100,
 		RuleID:      secret.RuleID,
@@ -635,4 +639,11 @@ func ParseJSONBytes(data []byte) (*Report, error) {
 		return nil, fmt.Errorf("failed to parse trivy JSON: %w", err)
 	}
 	return &report, nil
+}
+
+// ParseToEIS is a convenience function to parse Trivy JSON to EIS format.
+// This provides a consistent API with other scanner parsers (e.g., semgrep.ParseToEIS).
+func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
+	parser := NewParser()
+	return parser.Parse(context.Background(), data, opts)
 }

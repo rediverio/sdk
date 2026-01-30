@@ -100,10 +100,16 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 
 // convertResult converts a semgrep result to EIS finding.
 func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis.Finding {
+	// Build human-readable title from check ID
+	// e.g., "python.lang.security.audit.eval-injection" -> "Eval Injection"
+	humanTitle := SlugToNormalText(r.CheckID)
+
 	finding := eis.Finding{
 		ID:                 fmt.Sprintf("finding-%d", index+1),
 		Type:               eis.FindingTypeVulnerability,
-		Title:              fmt.Sprintf("%s at %s:%d", SlugToNormalText(r.CheckID), r.Path, r.Start.Line),
+		Title:              humanTitle,        // Short title for list display
+		Description:        r.Extra.Message,   // Detailed description from semgrep
+		Message:            r.Extra.Message,   // Primary message (same as description for semgrep)
 		Severity:           eis.Severity(r.GetSeverity()),
 		Confidence:         r.GetConfidence(),
 		Impact:             r.GetImpact(),
@@ -112,11 +118,8 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis
 		VulnerabilityClass: r.GetVulnerabilityClass(),
 		Subcategory:        r.GetSubcategory(),
 		RuleID:             r.CheckID,
-		RuleName:           SlugToNormalText(r.CheckID),
+		RuleName:           humanTitle,
 	}
-
-	// Description
-	finding.Description = r.Extra.Message
 
 	// Fingerprint
 	// Note: Semgrep may return "requires login" when pro features are unavailable
@@ -130,18 +133,30 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis
 	// Location
 	// Note: Semgrep may return "requires login" for Lines when pro features are unavailable
 	// In that case, we read the snippet directly from the source file
+	// We ALWAYS read context snippet for better understanding (±3 lines around the vulnerability)
 	snippet := r.Extra.Lines
+	var contextSnippet string
+	var contextStartLine int
+
+	// Always try to read context snippet from source file
+	snippetData := readSnippetWithContext(r.Path, r.Start.Line, r.End.Line, DefaultContextLines, opts)
+	contextSnippet = snippetData.ContextSnippet
+	contextStartLine = snippetData.ContextStartLine
+
+	// If Semgrep didn't return a valid snippet, use the one we read from file
 	if snippet == "requires login" || snippet == "" {
-		// Try to read snippet from source file
-		snippet = readSnippetFromFile(r.Path, r.Start.Line, r.End.Line, opts)
+		snippet = snippetData.Snippet
 	}
+
 	finding.Location = &eis.FindingLocation{
-		Path:        r.Path,
-		StartLine:   r.Start.Line,
-		EndLine:     r.End.Line,
-		StartColumn: r.Start.Col,
-		EndColumn:   r.End.Col,
-		Snippet:     snippet,
+		Path:             r.Path,
+		StartLine:        r.Start.Line,
+		EndLine:          r.End.Line,
+		StartColumn:      r.Start.Col,
+		EndColumn:        r.End.Col,
+		Snippet:          snippet,
+		ContextSnippet:   contextSnippet,
+		ContextStartLine: contextStartLine,
 	}
 
 	// Add branch/commit if available
@@ -154,16 +169,25 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis
 		}
 	}
 
-	// Vulnerability details (CWE, OWASP, etc.)
+	// Vulnerability details (CWE, OWASP, ASVS, etc.)
 	cwes := r.GetCWEs()
 	owasps := r.GetOWASPs()
-	if len(cwes) > 0 || len(owasps) > 0 {
+	hasASVS := r.Extra.Metadata.Asvs.Section != "" || r.Extra.Metadata.Asvs.Control != ""
+	if len(cwes) > 0 || len(owasps) > 0 || hasASVS {
 		finding.Vulnerability = &eis.VulnerabilityDetails{
 			CWEIDs:   cwes,
 			OWASPIDs: owasps,
 		}
 		if len(cwes) > 0 {
 			finding.Vulnerability.CWEID = cwes[0]
+		}
+		// Add ASVS compliance info if available
+		if hasASVS {
+			finding.Vulnerability.ASVS = &eis.ASVSInfo{
+				Section:    r.Extra.Metadata.Asvs.Section,
+				ControlID:  r.Extra.Metadata.Asvs.Control,
+				ControlURL: r.Extra.Metadata.Asvs.Version,
+			}
 		}
 	}
 
@@ -184,12 +208,21 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis
 		finding.Tags = append(finding.Tags, r.Extra.Metadata.Technology...)
 	}
 
-	// Remediation
-	if r.Extra.Fix != "" {
+	// Remediation with actual fix code
+	if r.Extra.Fix != "" || r.Extra.FixRegex != nil {
 		finding.Remediation = &eis.Remediation{
 			Recommendation: "Apply the suggested fix",
 			FixAvailable:   true,
 			AutoFixable:    true,
+			FixCode:        r.Extra.Fix,
+		}
+		// Add regex-based fix if available
+		if r.Extra.FixRegex != nil {
+			finding.Remediation.FixRegex = &eis.FixRegex{
+				Regex:       r.Extra.FixRegex.Regex,
+				Replacement: r.Extra.FixRegex.Replacement,
+				Count:       r.Extra.FixRegex.Count,
+			}
 		}
 	}
 
@@ -336,19 +369,35 @@ func isValidFingerprint(fp string) bool {
 	return true
 }
 
+// SnippetWithContext contains both the exact snippet and surrounding context.
+type SnippetWithContext struct {
+	Snippet          string // Exact code at vulnerability location
+	ContextSnippet   string // Surrounding code for better understanding
+	ContextStartLine int    // Line number where context starts
+}
+
+// DefaultContextLines is the number of lines to include before/after the snippet.
+const DefaultContextLines = 3
+
 // readSnippetFromFile reads lines from a source file to extract the code snippet.
 // This is used as a fallback when Semgrep returns "requires login" for the lines field.
 func readSnippetFromFile(filePath string, startLine, endLine int, opts *core.ParseOptions) string {
+	result := readSnippetWithContext(filePath, startLine, endLine, 0, opts)
+	return result.Snippet
+}
+
+// readSnippetWithContext reads the snippet along with surrounding context lines.
+// contextLines specifies how many lines before/after to include (0 = no context).
+func readSnippetWithContext(filePath string, startLine, endLine, contextLines int, opts *core.ParseOptions) SnippetWithContext {
+	result := SnippetWithContext{}
+
 	if startLine <= 0 || endLine <= 0 || endLine < startLine {
-		return ""
+		return result
 	}
 
 	// Determine the full path to the file
 	fullPath := filePath
-
-	// If opts has a base path (scan directory), prepend it
 	if opts != nil && opts.BasePath != "" {
-		// Check if filePath is already absolute
 		if !filepath.IsAbs(filePath) {
 			fullPath = filepath.Join(opts.BasePath, filePath)
 		}
@@ -357,42 +406,72 @@ func readSnippetFromFile(filePath string, startLine, endLine int, opts *core.Par
 	// Try to open the file
 	file, err := os.Open(fullPath)
 	if err != nil {
-		// File not accessible, return empty snippet
-		return ""
+		return result
 	}
 	defer file.Close()
 
+	// Calculate context boundaries
+	contextStart := startLine - contextLines
+	if contextStart < 1 {
+		contextStart = 1
+	}
+	contextEnd := endLine + contextLines
+
 	// Read lines from file
 	scanner := bufio.NewScanner(file)
-	var lines []string
+	var snippetLines []string
+	var contextLinesList []string
 	lineNum := 0
 
 	for scanner.Scan() {
 		lineNum++
+		lineText := scanner.Text()
+
+		// Collect snippet lines (exact match)
 		if lineNum >= startLine && lineNum <= endLine {
-			lines = append(lines, scanner.Text())
+			snippetLines = append(snippetLines, lineText)
 		}
-		if lineNum > endLine {
+
+		// Collect context lines (wider range)
+		if contextLines > 0 && lineNum >= contextStart && lineNum <= contextEnd {
+			contextLinesList = append(contextLinesList, lineText)
+		}
+
+		// Stop reading after context end
+		if lineNum > contextEnd && contextLines > 0 {
+			break
+		}
+		if lineNum > endLine && contextLines == 0 {
 			break
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return ""
+		return result
 	}
 
+	// Build snippet string
+	if len(snippetLines) > 0 {
+		result.Snippet = joinLines(snippetLines)
+	}
+
+	// Build context string
+	if len(contextLinesList) > 0 {
+		result.ContextSnippet = joinLines(contextLinesList)
+		result.ContextStartLine = contextStart
+	}
+
+	return result
+}
+
+// joinLines joins a slice of strings with newlines.
+func joinLines(lines []string) string {
 	if len(lines) == 0 {
 		return ""
 	}
-
-	// Join lines with newline
-	result := ""
-	for i, line := range lines {
-		if i > 0 {
-			result += "\n"
-		}
-		result += line
+	result := lines[0]
+	for i := 1; i < len(lines); i++ {
+		result += "\n" + lines[i]
 	}
-
 	return result
 }

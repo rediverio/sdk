@@ -196,6 +196,7 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) eis.Fin
 		Type:        findingType,
 		Title:       title,
 		Description: result.Info.Description,
+		Message:     title, // Primary display text
 		Severity:    severity,
 		Confidence:  85, // Nuclei templates are generally reliable
 		Category:    getCategoryFromTags(result.Info.Tags),
@@ -342,4 +343,16 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "...[truncated]"
+}
+
+// ParseToEIS is a convenience function to parse Nuclei JSON Lines to EIS format.
+// This provides a consistent API with other scanner parsers (e.g., semgrep.ParseToEIS).
+// Note: target can be extracted from opts.AssetValue or left empty if not needed.
+func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
+	parser := NewParser()
+	target := ""
+	if opts != nil && opts.AssetValue != "" {
+		target = opts.AssetValue
+	}
+	return parser.ParseWithOptions(data, target, opts)
 }

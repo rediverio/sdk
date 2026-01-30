@@ -190,11 +190,13 @@ func (p *Parser) convertResult(result *Result) *eis.Finding {
 	// Get rule metadata
 	rule := p.rules[result.RuleID]
 
+	title := p.buildTitle(result, rule)
 	finding := &eis.Finding{
 		Type:        eis.FindingTypeVulnerability,
 		RuleID:      result.RuleID,
-		Title:       p.buildTitle(result, rule),
+		Title:       title,
 		Description: result.Message.Text,
+		Message:     title, // Primary display text
 		Severity:    p.convertLevel(result.Level, rule),
 		Confidence:  p.getConfidence(rule),
 	}
@@ -698,4 +700,11 @@ func ParseSARIFFile(path string) ([]*eis.Finding, error) {
 // readFile reads a file and returns its contents.
 func readFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
+}
+
+// ParseToEIS is a convenience function to parse CodeQL SARIF to EIS format.
+// This provides a consistent API with other scanner parsers (e.g., semgrep.ParseToEIS).
+func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
+	parser := NewParser()
+	return parser.ParseToReportWithOptions(data, opts)
 }

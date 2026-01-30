@@ -915,6 +915,11 @@ type Finding struct {
 	// Detailed description
 	Description string `json:"description,omitempty"`
 
+	// Primary message to display (the main human-readable finding message)
+	// This is distinct from Title (short) and Description (detailed)
+	// If not set, Title will be used as the message
+	Message string `json:"message,omitempty"`
+
 	// Severity (required): critical, high, medium, low, info
 	Severity Severity `json:"severity"`
 
@@ -1356,6 +1361,9 @@ type VulnerabilityDetails struct {
 	// OWASP IDs (e.g., "A01:2021", "A03:2021")
 	OWASPIDs []string `json:"owasp_ids,omitempty"`
 
+	// ASVS (Application Security Verification Standard) compliance info
+	ASVS *ASVSInfo `json:"asvs,omitempty"`
+
 	// CVSS version (2.0, 3.0, 3.1, 4.0)
 	CVSSVersion string `json:"cvss_version,omitempty"`
 
@@ -1451,6 +1459,22 @@ type VulnDataSource struct {
 
 	// Data source URL
 	URL string `json:"url,omitempty"`
+}
+
+// ASVSInfo contains OWASP ASVS (Application Security Verification Standard) compliance info.
+// ASVS provides a basis for testing application security controls.
+type ASVSInfo struct {
+	// ASVS section (e.g., "V2: Authentication")
+	Section string `json:"section,omitempty"`
+
+	// Control ID (e.g., "2.1.1")
+	ControlID string `json:"control_id,omitempty"`
+
+	// Control URL (link to ASVS documentation)
+	ControlURL string `json:"control_url,omitempty"`
+
+	// ASVS level (1, 2, or 3)
+	Level int `json:"level,omitempty"`
 }
 
 // ContainerLayer contains information about the container layer where a vulnerability was found.
@@ -1873,8 +1897,28 @@ type Remediation struct {
 	// Auto-fixable
 	AutoFixable bool `json:"auto_fixable,omitempty"`
 
+	// Suggested fix code - the actual code to replace the vulnerable code
+	// For SAST tools like Semgrep that provide auto-fix suggestions
+	FixCode string `json:"fix_code,omitempty"`
+
+	// Regex-based fix pattern (for tools that provide regex replacements)
+	FixRegex *FixRegex `json:"fix_regex,omitempty"`
+
 	// Reference URLs
 	References []string `json:"references,omitempty"`
+}
+
+// FixRegex contains regex-based auto-fix information.
+// Used by tools like Semgrep that can provide regex replacement patterns.
+type FixRegex struct {
+	// Regular expression pattern to match
+	Regex string `json:"regex,omitempty"`
+
+	// Replacement string (may contain capture group references like $1, $2)
+	Replacement string `json:"replacement,omitempty"`
+
+	// Number of replacements to make (0 = all)
+	Count int `json:"count,omitempty"`
 }
 
 // =============================================================================

@@ -82,10 +82,12 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 
 // convertFinding converts a gitleaks finding to EIS finding.
 func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) eis.Finding {
+	title := fmt.Sprintf("%s detected in %s:%d", f.Description, f.File, f.StartLine)
 	finding := eis.Finding{
 		ID:         fmt.Sprintf("finding-%d", index+1),
 		Type:       eis.FindingTypeSecret,
-		Title:      fmt.Sprintf("%s detected in %s:%d", f.Description, f.File, f.StartLine),
+		Title:      title,
+		Message:    title, // Primary display text
 		Severity:   eis.SeverityHigh, // Secrets are always high severity
 		Confidence: 90,
 		Category:   "Hardcoded Secret",

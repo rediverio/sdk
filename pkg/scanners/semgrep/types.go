@@ -357,13 +357,33 @@ func (r *Result) GetCategory() string {
 }
 
 // GetCWEs returns CWE IDs from metadata.
+// Extracts just the CWE ID from strings like "CWE-250: Execution with Unnecessary Privileges".
 func (r *Result) GetCWEs() []string {
-	return r.Extra.Metadata.CWE
+	cwes := make([]string, 0, len(r.Extra.Metadata.CWE))
+	for _, cwe := range r.Extra.Metadata.CWE {
+		// Extract CWE ID (e.g., "CWE-250" from "CWE-250: Description")
+		if idx := strings.Index(cwe, ":"); idx > 0 {
+			cwes = append(cwes, strings.TrimSpace(cwe[:idx]))
+		} else {
+			cwes = append(cwes, cwe)
+		}
+	}
+	return cwes
 }
 
 // GetOWASPs returns OWASP IDs from metadata (e.g., "A01:2021", "A03:2021").
+// Extracts just the OWASP ID from strings like "A04:2021 - Insecure Design".
 func (r *Result) GetOWASPs() []string {
-	return r.Extra.Metadata.OWASP
+	owasps := make([]string, 0, len(r.Extra.Metadata.OWASP))
+	for _, owasp := range r.Extra.Metadata.OWASP {
+		// Extract OWASP ID (e.g., "A04:2021" from "A04:2021 - Insecure Design")
+		if idx := strings.Index(owasp, " - "); idx > 0 {
+			owasps = append(owasps, strings.TrimSpace(owasp[:idx]))
+		} else {
+			owasps = append(owasps, owasp)
+		}
+	}
+	return owasps
 }
 
 // GetImpact returns the impact level from metadata (HIGH, MEDIUM, LOW).
