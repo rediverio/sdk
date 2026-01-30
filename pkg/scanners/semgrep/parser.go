@@ -1,8 +1,11 @@
 package semgrep
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/exploopio/sdk/pkg/core"
@@ -25,8 +28,20 @@ func (p *Parser) SupportedFormats() []string {
 // CanParse checks if the parser can handle the given data.
 func (p *Parser) CanParse(data []byte) bool {
 	// Try to parse as semgrep JSON
-	_, err := ParseJSONBytes(data)
-	return err == nil
+	report, err := ParseJSONBytes(data)
+	if err != nil {
+		return false
+	}
+	// Check for semgrep-specific fields to avoid matching trivy/other JSON formats
+	// Semgrep results have check_id, path, start, end, extra fields
+	// If Results is empty but no errors, it might still be valid semgrep output
+	if len(report.Results) > 0 {
+		// Check if first result has semgrep-specific fields
+		r := report.Results[0]
+		return r.CheckID != "" && r.Path != ""
+	}
+	// Empty results with version field is likely semgrep
+	return report.Version != ""
 }
 
 // Parse converts semgrep JSON output to EIS report.
@@ -56,6 +71,17 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 	}
 	if semgrepReport.Version != "" {
 		report.Tool.Version = semgrepReport.Version
+	}
+
+	// Set branch info from options (critical for asset auto-creation in ingest)
+	if opts != nil && opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts != nil && (opts.Branch != "" || opts.CommitSHA != "") {
+		// Legacy: create BranchInfo from individual fields
+		report.Metadata.Branch = &eis.BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
 	}
 
 	// Add asset from options or branch info
@@ -93,20 +119,29 @@ func (p *Parser) convertResult(r Result, index int, opts *core.ParseOptions) eis
 	finding.Description = r.Extra.Message
 
 	// Fingerprint
-	if r.Extra.Fingerprint != "" {
+	// Note: Semgrep may return "requires login" when pro features are unavailable
+	// We validate the fingerprint and generate our own if it's not a valid hash
+	if r.Extra.Fingerprint != "" && isValidFingerprint(r.Extra.Fingerprint) {
 		finding.Fingerprint = r.Extra.Fingerprint
 	} else {
 		finding.Fingerprint = core.GenerateSastFingerprint(r.Path, r.CheckID, r.Start.Line)
 	}
 
 	// Location
+	// Note: Semgrep may return "requires login" for Lines when pro features are unavailable
+	// In that case, we read the snippet directly from the source file
+	snippet := r.Extra.Lines
+	if snippet == "requires login" || snippet == "" {
+		// Try to read snippet from source file
+		snippet = readSnippetFromFile(r.Path, r.Start.Line, r.End.Line, opts)
+	}
 	finding.Location = &eis.FindingLocation{
 		Path:        r.Path,
 		StartLine:   r.Start.Line,
 		EndLine:     r.End.Line,
 		StartColumn: r.Start.Col,
 		EndColumn:   r.End.Col,
-		Snippet:     r.Extra.Lines,
+		Snippet:     snippet,
 	}
 
 	// Add branch/commit if available
@@ -283,4 +318,81 @@ func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *eis.Asset {
 func ParseToEIS(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	parser := &Parser{}
 	return parser.Parse(context.Background(), data, opts)
+}
+
+// isValidFingerprint checks if a fingerprint is a valid hash-like string.
+// Semgrep may return "requires login" when pro features are unavailable.
+func isValidFingerprint(fp string) bool {
+	// Fingerprint should be at least 16 chars (e.g., short hash) and alphanumeric
+	if len(fp) < 16 {
+		return false
+	}
+	// Check if it looks like a hex hash (alphanumeric, no spaces)
+	for _, c := range fp {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// readSnippetFromFile reads lines from a source file to extract the code snippet.
+// This is used as a fallback when Semgrep returns "requires login" for the lines field.
+func readSnippetFromFile(filePath string, startLine, endLine int, opts *core.ParseOptions) string {
+	if startLine <= 0 || endLine <= 0 || endLine < startLine {
+		return ""
+	}
+
+	// Determine the full path to the file
+	fullPath := filePath
+
+	// If opts has a base path (scan directory), prepend it
+	if opts != nil && opts.BasePath != "" {
+		// Check if filePath is already absolute
+		if !filepath.IsAbs(filePath) {
+			fullPath = filepath.Join(opts.BasePath, filePath)
+		}
+	}
+
+	// Try to open the file
+	file, err := os.Open(fullPath)
+	if err != nil {
+		// File not accessible, return empty snippet
+		return ""
+	}
+	defer file.Close()
+
+	// Read lines from file
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		if lineNum >= startLine && lineNum <= endLine {
+			lines = append(lines, scanner.Text())
+		}
+		if lineNum > endLine {
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return ""
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	// Join lines with newline
+	result := ""
+	for i, line := range lines {
+		if i > 0 {
+			result += "\n"
+		}
+		result += line
+	}
+
+	return result
 }

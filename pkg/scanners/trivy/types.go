@@ -82,6 +82,15 @@ type Package struct {
 
 	// Identifiers
 	Identifier PkgIdentifier `json:"Identifier,omitempty"`
+
+	// Locations where this package is defined
+	Locations []PkgLocation `json:"Locations,omitempty"`
+}
+
+// PkgLocation represents a location in a manifest file.
+type PkgLocation struct {
+	StartLine int `json:"StartLine"`
+	EndLine   int `json:"EndLine"`
 }
 
 // PkgIdentifier contains package identifiers.

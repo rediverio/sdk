@@ -8,7 +8,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/exploopio/sdk/pkg/core"
 	"github.com/exploopio/sdk/pkg/eis"
 )
 
@@ -56,6 +58,11 @@ func (p *Parser) Parse(data []byte) ([]*eis.Finding, error) {
 
 // ParseToReport parses CodeQL SARIF to a complete EIS report.
 func (p *Parser) ParseToReport(data []byte) (*eis.Report, error) {
+	return p.ParseToReportWithOptions(data, nil)
+}
+
+// ParseToReportWithOptions parses CodeQL SARIF to a complete EIS report with options.
+func (p *Parser) ParseToReportWithOptions(data []byte, opts *core.ParseOptions) (*eis.Report, error) {
 	findingPtrs, err := p.Parse(data)
 	if err != nil {
 		return nil, err
@@ -71,6 +78,10 @@ func (p *Parser) ParseToReport(data []byte) (*eis.Report, error) {
 
 	report := &eis.Report{
 		Version: "1.0",
+		Metadata: eis.ReportMetadata{
+			SourceType: "scanner",
+			Timestamp:  time.Now(),
+		},
 		Tool: &eis.Tool{
 			Name:    "codeql",
 			Version: p.getToolVersion(data),
@@ -78,7 +89,83 @@ func (p *Parser) ParseToReport(data []byte) (*eis.Report, error) {
 		Findings: findings,
 	}
 
+	// Set branch info from options (critical for asset auto-creation in ingest)
+	if opts != nil && opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts != nil && (opts.Branch != "" || opts.CommitSHA != "") {
+		// Legacy: create BranchInfo from individual fields
+		report.Metadata.Branch = &eis.BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
+	}
+
+	// Add asset from options or branch info
+	if asset := p.createAssetFromOptions(opts); asset != nil {
+		report.Assets = append(report.Assets, *asset)
+		// Link findings to this asset
+		for i := range report.Findings {
+			report.Findings[i].AssetRef = asset.ID
+		}
+	}
+
 	return report, nil
+}
+
+// createAssetFromOptions creates an asset from parse options or branch info.
+func (p *Parser) createAssetFromOptions(opts *core.ParseOptions) *eis.Asset {
+	if opts == nil {
+		return nil
+	}
+
+	assetID := opts.AssetID
+	if assetID == "" {
+		assetID = "asset-1"
+	}
+
+	// Priority 1: Explicit AssetValue
+	if opts.AssetValue != "" {
+		assetType := opts.AssetType
+		if assetType == "" {
+			assetType = eis.AssetTypeRepository
+		}
+		return &eis.Asset{
+			ID:          assetID,
+			Type:        assetType,
+			Value:       opts.AssetValue,
+			Name:        opts.AssetValue,
+			Criticality: eis.CriticalityHigh,
+			Properties: eis.Properties{
+				"source": "parse_options",
+			},
+		}
+	}
+
+	// Priority 2: BranchInfo.RepositoryURL
+	if opts.BranchInfo != nil && opts.BranchInfo.RepositoryURL != "" {
+		props := eis.Properties{
+			"source":       "branch_info",
+			"auto_created": true,
+		}
+		if opts.BranchInfo.CommitSHA != "" {
+			props["commit_sha"] = opts.BranchInfo.CommitSHA
+		}
+		if opts.BranchInfo.Name != "" {
+			props["branch"] = opts.BranchInfo.Name
+		}
+		props["is_default_branch"] = opts.BranchInfo.IsDefaultBranch
+
+		return &eis.Asset{
+			ID:          assetID,
+			Type:        eis.AssetTypeRepository,
+			Value:       opts.BranchInfo.RepositoryURL,
+			Name:        opts.BranchInfo.RepositoryURL,
+			Criticality: eis.CriticalityHigh,
+			Properties:  props,
+		}
+	}
+
+	return nil
 }
 
 // indexRules indexes rules from the SARIF run for metadata lookup.

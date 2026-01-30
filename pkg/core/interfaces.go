@@ -304,6 +304,10 @@ type ParseOptions struct {
 	// Provides full CI/CD context for auto-resolve and expiry features
 	BranchInfo *eis.BranchInfo `json:"branch_info,omitempty"`
 
+	// BasePath is the root directory of the scanned codebase.
+	// Used to resolve relative file paths when reading snippets from source files.
+	BasePath string `json:"base_path,omitempty"`
+
 	// Defaults
 	DefaultConfidence int `json:"default_confidence"`
 }

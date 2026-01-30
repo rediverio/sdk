@@ -4,9 +4,7 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,8 +17,8 @@ import (
 	"github.com/exploopio/sdk/pkg/chunk"
 	"github.com/exploopio/sdk/pkg/compress"
 	"github.com/exploopio/sdk/pkg/core"
-	"github.com/exploopio/sdk/pkg/retry"
 	"github.com/exploopio/sdk/pkg/eis"
+	"github.com/exploopio/sdk/pkg/retry"
 )
 
 // Client is the Exploop API client.
@@ -236,59 +234,6 @@ type IngestResponse struct {
 	Errors          []string `json:"errors,omitempty"`
 }
 
-// IngestInput represents the backend API ingest format.
-type IngestInput struct {
-	Version  string          `json:"version"`
-	Metadata IngestMetadata  `json:"metadata"`
-	Targets  []IngestTarget  `json:"targets,omitempty"`
-	Findings []IngestFinding `json:"findings,omitempty"`
-	Summary  *IngestSummary  `json:"summary,omitempty"`
-}
-
-// IngestMetadata contains metadata about the scan.
-type IngestMetadata struct {
-	ToolName    string    `json:"tool_name"`
-	ToolVersion string    `json:"tool_version"`
-	ScanID      string    `json:"scan_id"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time"`
-	AgentID     string    `json:"agent_id,omitempty"`
-}
-
-// IngestTarget represents a target asset.
-type IngestTarget struct {
-	Type        string         `json:"type"`
-	Identifier  string         `json:"identifier"`
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-}
-
-// IngestFinding represents a finding in the ingest format.
-type IngestFinding struct {
-	RuleID      string         `json:"rule_id"`
-	Severity    string         `json:"severity"`
-	Message     string         `json:"message"`
-	Description string         `json:"description,omitempty"`
-	FilePath    string         `json:"file_path,omitempty"`
-	StartLine   int            `json:"start_line,omitempty"`
-	EndLine     int            `json:"end_line,omitempty"`
-	StartColumn int            `json:"start_column,omitempty"`
-	EndColumn   int            `json:"end_column,omitempty"`
-	Snippet     string         `json:"snippet,omitempty"`
-	TargetIndex int            `json:"target_index,omitempty"`
-	Fingerprint string         `json:"fingerprint,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-}
-
-// IngestSummary contains summary statistics.
-type IngestSummary struct {
-	TotalTargets  int            `json:"total_targets"`
-	TotalFindings int            `json:"total_findings"`
-	BySeverity    map[string]int `json:"by_severity"`
-	Duration      string         `json:"duration"`
-}
-
 // HeartbeatRequest is the heartbeat payload.
 type HeartbeatRequest struct {
 	Name       string          `json:"name,omitempty"`
@@ -336,10 +281,8 @@ func (c *Client) pushFindingsInternal(ctx context.Context, report *eis.Report) (
 		fmt.Printf("[exploop] Pushing %d findings to %s\n", len(report.Findings), url)
 	}
 
-	// Convert EIS Report to IngestInput format
-	input := c.convertToIngestInput(report)
-
-	body, err := json.Marshal(input)
+	// Send EIS Report directly (API expects eis.Report format)
+	body, err := json.Marshal(report)
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}
@@ -402,11 +345,11 @@ func (c *Client) pushAssetsInternal(ctx context.Context, report *eis.Report) (*c
 		fmt.Printf("[exploop] Pushing %d assets to %s\n", len(report.Assets), url)
 	}
 
-	// Convert EIS Report to IngestInput format (assets only)
-	input := c.convertToIngestInput(report)
-	input.Findings = nil // Clear findings for assets-only push
+	// Send EIS Report directly with findings cleared (API expects eis.Report format)
+	assetOnlyReport := *report
+	assetOnlyReport.Findings = nil
 
-	body, err := json.Marshal(input)
+	body, err := json.Marshal(&assetOnlyReport)
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}
@@ -723,124 +666,6 @@ func (c *Client) SetVerbose(v bool) {
 	c.verbose = v
 }
 
-// convertToIngestInput converts a EIS Report to IngestInput format.
-func (c *Client) convertToIngestInput(report *eis.Report) *IngestInput {
-	// Generate scan ID if not provided
-	scanID := report.Metadata.ID
-	if scanID == "" {
-		scanID = generateID()
-	}
-
-	// Get tool info
-	toolName := "unknown"
-	toolVersion := ""
-	if report.Tool != nil {
-		toolName = report.Tool.Name
-		toolVersion = report.Tool.Version
-	}
-
-	input := &IngestInput{
-		Version: report.Version,
-		Metadata: IngestMetadata{
-			ToolName:    toolName,
-			ToolVersion: toolVersion,
-			ScanID:      scanID,
-			StartTime:   report.Metadata.Timestamp,
-			EndTime:     time.Now(),
-			AgentID:     c.agentID,
-		},
-		Targets:  make([]IngestTarget, 0, len(report.Assets)),
-		Findings: make([]IngestFinding, 0, len(report.Findings)),
-	}
-
-	// Build asset index for finding references
-	assetIndex := make(map[string]int)
-
-	// Convert assets to targets
-	for i, asset := range report.Assets {
-		assetIndex[asset.ID] = i
-
-		target := IngestTarget{
-			Type:        string(asset.Type),
-			Identifier:  asset.Value,
-			Name:        asset.Name,
-			Description: asset.Description,
-		}
-
-		if len(asset.Properties) > 0 {
-			target.Metadata = asset.Properties
-		}
-
-		input.Targets = append(input.Targets, target)
-	}
-
-	// Convert findings
-	for _, finding := range report.Findings {
-		f := IngestFinding{
-			RuleID:      finding.RuleID,
-			Severity:    string(finding.Severity),
-			Message:     finding.Title,
-			Description: finding.Description,
-			Fingerprint: finding.Fingerprint,
-		}
-
-		// Set location if available
-		if finding.Location != nil {
-			f.FilePath = finding.Location.Path
-			f.StartLine = finding.Location.StartLine
-			f.EndLine = finding.Location.EndLine
-			f.StartColumn = finding.Location.StartColumn
-			f.EndColumn = finding.Location.EndColumn
-			f.Snippet = finding.Location.Snippet
-		}
-
-		// Set target index if asset reference exists
-		if finding.AssetRef != "" {
-			if idx, ok := assetIndex[finding.AssetRef]; ok {
-				f.TargetIndex = idx
-			}
-		}
-
-		// Copy properties to metadata
-		if len(finding.Properties) > 0 {
-			f.Metadata = finding.Properties
-		}
-
-		input.Findings = append(input.Findings, f)
-	}
-
-	// Add summary
-	if len(input.Findings) > 0 || len(input.Targets) > 0 {
-		bySeverity := make(map[string]int)
-		for _, f := range input.Findings {
-			bySeverity[f.Severity]++
-		}
-
-		input.Summary = &IngestSummary{
-			TotalTargets:  len(input.Targets),
-			TotalFindings: len(input.Findings),
-			BySeverity:    bySeverity,
-		}
-
-		if report.Metadata.DurationMs > 0 {
-			input.Summary.Duration = fmt.Sprintf("%dms", report.Metadata.DurationMs)
-		}
-	}
-
-	return input
-}
-
-// generateID generates a random ID string.
-func generateID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback or panic? For ID generation, we usually expect it to work.
-		// Given the signature can't satisfy panic easily without crashing.
-		// We'll panic here as crypto/rand failure is critical.
-		panic(fmt.Sprintf("failed to generate ID: %v", err))
-	}
-	return hex.EncodeToString(b)
-}
 
 // ============================================================================
 // Retry Queue Methods
