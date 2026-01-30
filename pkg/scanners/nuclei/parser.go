@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/exploopio/sdk/pkg/core"
 	"github.com/exploopio/sdk/pkg/eis"
 )
 
@@ -25,17 +26,27 @@ func NewParser() *Parser {
 
 // Parse converts Nuclei JSON Lines output to EIS Report.
 func (p *Parser) Parse(data []byte, target string) (*eis.Report, error) {
+	return p.ParseWithOptions(data, target, nil)
+}
+
+// ParseWithOptions converts Nuclei JSON Lines output to EIS Report with options.
+func (p *Parser) ParseWithOptions(data []byte, target string, opts *core.ParseOptions) (*eis.Report, error) {
 	results, err := p.parseJSONLines(data)
 	if err != nil {
 		return nil, err
 	}
 
-	return p.toRISReport(results, target), nil
+	return p.toRISReportWithOptions(results, target, opts), nil
 }
 
 // ParseResults converts parsed Nuclei results to EIS Report.
 func (p *Parser) ParseResults(results []Result, target string) *eis.Report {
-	return p.toRISReport(results, target)
+	return p.toRISReportWithOptions(results, target, nil)
+}
+
+// ParseResultsWithOptions converts parsed Nuclei results to EIS Report with options.
+func (p *Parser) ParseResultsWithOptions(results []Result, target string, opts *core.ParseOptions) *eis.Report {
+	return p.toRISReportWithOptions(results, target, opts)
 }
 
 // parseJSONLines parses Nuclei's JSON Lines output format.
@@ -72,11 +83,22 @@ func (p *Parser) parseJSONLines(data []byte) ([]Result, error) {
 	return results, nil
 }
 
-// toRISReport converts Nuclei results to EIS Report format.
-func (p *Parser) toRISReport(results []Result, target string) *eis.Report {
+// toRISReportWithOptions converts Nuclei results to EIS Report format with options.
+func (p *Parser) toRISReportWithOptions(results []Result, _ string, opts *core.ParseOptions) *eis.Report {
 	report := eis.NewReport()
 	report.Metadata.SourceType = "scanner"
 	report.Metadata.Timestamp = time.Now()
+
+	// Set branch info from options (critical for asset auto-creation in ingest)
+	if opts != nil && opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts != nil && (opts.Branch != "" || opts.CommitSHA != "") {
+		// Legacy: create BranchInfo from individual fields
+		report.Metadata.Branch = &eis.BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
+	}
 
 	report.Tool = &eis.Tool{
 		Name:         "nuclei",
@@ -215,6 +237,9 @@ func (p *Parser) toRISFinding(result Result, assetRef string, index int) eis.Fin
 		if result.Info.Classification.EPSSScore > 0 {
 			finding.Vulnerability.EPSSScore = result.Info.Classification.EPSSScore
 			finding.Vulnerability.EPSSPercentile = result.Info.Classification.EPSSPercentile
+		}
+		if result.Info.Classification.CPEURI != "" {
+			finding.Vulnerability.CPE = result.Info.Classification.CPEURI
 		}
 	}
 

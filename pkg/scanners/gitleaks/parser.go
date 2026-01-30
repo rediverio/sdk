@@ -55,6 +55,17 @@ func (p *Parser) Parse(ctx context.Context, data []byte, opts *core.ParseOptions
 		},
 	}
 
+	// Set branch info from options (critical for asset auto-creation in ingest)
+	if opts != nil && opts.BranchInfo != nil {
+		report.Metadata.Branch = opts.BranchInfo
+	} else if opts != nil && (opts.Branch != "" || opts.CommitSHA != "") {
+		// Legacy: create BranchInfo from individual fields
+		report.Metadata.Branch = &eis.BranchInfo{
+			Name:      opts.Branch,
+			CommitSHA: opts.CommitSHA,
+		}
+	}
+
 	// Add asset from options or branch info
 	if asset := p.createAssetFromOptions(opts); asset != nil {
 		report.Assets = append(report.Assets, *asset)
@@ -114,6 +125,36 @@ func (p *Parser) convertFinding(f Finding, index int, opts *core.ParseOptions) e
 	// If commit from gitleaks is available, use it
 	if f.Commit != "" {
 		finding.Location.CommitSHA = f.Commit
+	}
+
+	// Set git metadata from gitleaks
+	if f.Author != "" {
+		finding.Author = f.Author
+	}
+	if f.Email != "" {
+		finding.AuthorEmail = f.Email
+	}
+	if f.Date != "" {
+		// Try to parse date in various formats
+		for _, layout := range []string{
+			time.RFC3339,
+			"2006-01-02T15:04:05Z",
+			"2006-01-02 15:04:05 -0700",
+			"Mon Jan 2 15:04:05 2006 -0700",
+		} {
+			if t, err := time.Parse(layout, f.Date); err == nil {
+				finding.CommitDate = &t
+				break
+			}
+		}
+	}
+
+	// Store commit message in properties for reference
+	if f.Message != "" {
+		if finding.Properties == nil {
+			finding.Properties = make(map[string]any)
+		}
+		finding.Properties["commit_message"] = f.Message
 	}
 
 	// Set secret details
